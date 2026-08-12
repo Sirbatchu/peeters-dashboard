@@ -104,6 +104,10 @@
     <div class="offline">Reconnecting to the house server…</div>
   {/if}
 
+  {#if bedtime}
+    <div class="bedtime-chip">🌙 Bedtime mode — back to full brightness at {settings.bedtime_end || '06:30'}</div>
+  {/if}
+
   {#if countdown}
     <div class="countdown" class:urgent={countdown.urgent} class:critical={countdown.critical}>
       <span class="cd-icon">🎒</span>
@@ -258,10 +262,24 @@
 
   /* Bedtime mode */
   .shell.dimmed {
-    -webkit-filter: brightness(0.55) saturate(0.7);
-    filter: brightness(0.55) saturate(0.7);
+    -webkit-filter: brightness(0.68) saturate(0.75);
+    filter: brightness(0.68) saturate(0.75);
     -webkit-transition: -webkit-filter 2s ease;
     transition: filter 2s ease;
+  }
+  .bedtime-chip {
+    max-width: 1100px;
+    width: calc(100% - 32px);
+    margin: 10px auto 0;
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.6);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    color: #cbd5e1;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
   }
   .night-veil {
     position: fixed;
