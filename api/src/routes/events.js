@@ -4,6 +4,46 @@ import { buildInvite, buildFeed } from '../ics.js';
 
 const smtpConfigured = () => Boolean(process.env.SMTP_HOST && process.env.INVITE_FROM);
 
+/**
+ * Expand a recurring event into concrete occurrences within [start, end].
+ * Occurrences share the parent id (delete/edit = whole series) and carry
+ * occurrence_date so the UI can tell instances apart.
+ */
+function expand(ev, start, end, cap = 500) {
+  if (!ev.recur_freq) return [ev];
+
+  const out = [];
+  const duration = new Date(ev.ends_at) - new Date(ev.starts_at);
+  const interval = ev.recur_interval || 1;
+  const until = ev.recur_until ? new Date(ev.recur_until + 'T23:59:59Z') : null;
+  const rangeStart = new Date(start);
+  const rangeEnd = new Date(end);
+
+  let cur = new Date(ev.starts_at);
+  for (let i = 0; i < cap; i++) {
+    if (cur > rangeEnd) break;
+    if (until && cur > until) break;
+    if (new Date(cur.getTime() + duration) >= rangeStart) {
+      out.push({
+        ...ev,
+        starts_at: cur.toISOString(),
+        ends_at: new Date(cur.getTime() + duration).toISOString(),
+        occurrence_date: cur.toISOString().slice(0, 10)
+      });
+    }
+    // Month/year stepping uses calendar math so "the 15th" stays the 15th.
+    if (ev.recur_freq === 'daily') cur = new Date(cur.getTime() + interval * 864e5);
+    else if (ev.recur_freq === 'weekly') cur = new Date(cur.getTime() + interval * 7 * 864e5);
+    else {
+      const d = new Date(cur);
+      if (ev.recur_freq === 'monthly') d.setUTCMonth(d.getUTCMonth() + interval);
+      else d.setUTCFullYear(d.getUTCFullYear() + interval);
+      cur = d;
+    }
+  }
+  return out;
+}
+
 export default async function routes(app) {
   app.get('/calendars', async () => {
     const { rows } = await q('SELECT slug, label, colour FROM calendars ORDER BY slug');
@@ -18,29 +58,40 @@ export default async function routes(app) {
       `SELECT e.*, c.colour, c.label AS calendar_label
          FROM events e
          JOIN calendars c ON c.slug = e.calendar
-        WHERE e.ends_at >= $1 AND e.starts_at <= $2
+        WHERE (e.recur_freq IS NOT NULL AND e.starts_at <= $2
+               AND (e.recur_until IS NULL OR e.recur_until >= $1::date))
+           OR (e.recur_freq IS NULL AND e.ends_at >= $1 AND e.starts_at <= $2)
         ORDER BY e.starts_at`,
       [start, end]
     );
-    return rows;
+    return rows
+      .flatMap((ev) => expand(ev, start, end))
+      .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
   });
 
   app.post('/events', async (req, reply) => {
-    const { calendar, title, description, location, starts_at, ends_at, all_day } = req.body || {};
+    const {
+      calendar, title, description, location, starts_at, ends_at, all_day,
+      recur_freq, recur_interval, recur_until
+    } = req.body || {};
     if (!title || !starts_at) {
       return reply.status(400).send({ error: 'title and starts_at are required' });
     }
     const { rows } = await q(
-      `INSERT INTO events (calendar, title, description, location, starts_at, ends_at, all_day)
-       VALUES ($1, $2, $3, $4, $5::timestamptz, COALESCE($6::timestamptz, $5::timestamptz), COALESCE($7::boolean, FALSE))
+      `INSERT INTO events
+         (calendar, title, description, location, starts_at, ends_at, all_day,
+          recur_freq, recur_interval, recur_until)
+       VALUES ($1, $2, $3, $4, $5::timestamptz, COALESCE($6::timestamptz, $5::timestamptz), COALESCE($7::boolean, FALSE),
+               $8, COALESCE($9::int, 1), $10::date)
        RETURNING *`,
-      [calendar || 'family', title, description || null, location || null, starts_at, ends_at, all_day]
+      [calendar || 'family', title, description || null, location || null,
+       starts_at, ends_at, all_day, recur_freq || null, recur_interval, recur_until || null]
     );
     return reply.status(201).send(rows[0]);
   });
 
   app.patch('/events/:id', async (req, reply) => {
-    const allowed = ['calendar', 'title', 'description', 'location', 'starts_at', 'ends_at', 'all_day'];
+    const allowed = ['calendar', 'title', 'description', 'location', 'starts_at', 'ends_at', 'all_day', 'recur_freq', 'recur_interval', 'recur_until'];
     const sets = [];
     const vals = [];
     for (const key of allowed) {

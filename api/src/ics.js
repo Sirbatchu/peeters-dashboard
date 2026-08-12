@@ -48,6 +48,13 @@ function vevent(ev, { organizer, attendees = [] } = {}) {
     `SEQUENCE:${ev.sequence ?? 0}`
   ];
 
+  if (ev.recur_freq) {
+    let rrule = `RRULE:FREQ=${ev.recur_freq.toUpperCase()}`;
+    if (ev.recur_interval > 1) rrule += `;INTERVAL=${ev.recur_interval}`;
+    if (ev.recur_until) rrule += `;UNTIL=${ev.recur_until.replace(/-/g, '')}T235959Z`;
+    lines.push(rrule);
+  }
+
   if (ev.description) lines.push(`DESCRIPTION:${esc(ev.description)}`);
   if (ev.location) lines.push(`LOCATION:${esc(ev.location)}`);
   if (organizer) lines.push(`ORGANIZER;CN=${esc(organizer.name)}:mailto:${organizer.email}`);

@@ -6,11 +6,39 @@
   let birthdays = $state([]);
   let cursor = $state(new Date());
   let selected = $state(null); // day cell tapped
-  let showForm = $state(false);
+  let showForm = $state(false); // add-event modal
   let invitesEnabled = $state(false);
-  let form = $state({ title: '', calendar: 'family', time: '10:00', location: '', emails: '' });
+  let form = $state(blankForm());
   let busy = $state(false);
   let error = $state('');
+
+  const REPEATS = [
+    { value: '', label: 'Does not repeat' },
+    { value: 'daily', label: 'Daily' },
+    { value: 'weekly', label: 'Weekly' },
+    { value: 'fortnightly', label: 'Every 2 weeks' },
+    { value: 'monthly', label: 'Monthly' },
+    { value: 'yearly', label: 'Yearly' }
+  ];
+
+  function blankForm(date) {
+    return {
+      title: '',
+      calendar: 'family',
+      date: date || ymd(new Date()),
+      time: '10:00',
+      location: '',
+      emails: '',
+      repeat: '',
+      until: ''
+    };
+  }
+
+  function openForm(date) {
+    form = blankForm(date);
+    selected = null;
+    showForm = true;
+  }
 
   const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -93,21 +121,24 @@
     busy = true;
     error = '';
     try {
-      const starts = selected.key + 'T' + form.time + ':00';
+      const starts = form.date + 'T' + form.time + ':00';
+      // "fortnightly" is weekly with interval 2 under the hood
+      const freq = form.repeat === 'fortnightly' ? 'weekly' : form.repeat || null;
       const created = await api.post('/events', {
         title: form.title.trim(),
         calendar: form.calendar,
         location: form.location.trim() || null,
         starts_at: new Date(starts).toISOString(),
-        ends_at: new Date(new Date(starts).getTime() + 3600000).toISOString()
+        ends_at: new Date(new Date(starts).getTime() + 3600000).toISOString(),
+        recur_freq: freq,
+        recur_interval: form.repeat === 'fortnightly' ? 2 : 1,
+        recur_until: form.repeat && form.until ? form.until : null
       });
       const emails = form.emails.split(/[,;\s]+/).filter(Boolean);
       if (emails.length && invitesEnabled) {
         await api.post('/events/' + created.id + '/invite', { emails });
       }
-      form = { title: '', calendar: 'family', time: '10:00', location: '', emails: '' };
       showForm = false;
-      selected = null;
       await load();
     } catch (e) {
       error = e.message;
@@ -117,7 +148,10 @@
   }
 
   async function removeEvent(ev) {
-    if (!confirm('Delete "' + ev.title + '"?')) return;
+    const label = ev.recur_freq
+      ? 'Delete "' + ev.title + '" and all its repeats?'
+      : 'Delete "' + ev.title + '"?';
+    if (!confirm(label)) return;
     try {
       await api.del('/events/' + ev.id);
       selected = null;
@@ -133,6 +167,7 @@
     <button class="nav" onclick={() => move(-1)}>‹</button>
     <div class="month">{monthLabel}</div>
     <button class="nav" onclick={() => move(1)}>›</button>
+    <button class="add" onclick={() => openForm()}>＋ Add event</button>
   </div>
 
   {#if error}<div class="error">{error}</div>{/if}
@@ -153,8 +188,8 @@
         {#each cell.birthdays.slice(0, 1) as b (b.id)}
           <div class="pill bday">🎂 {b.name}</div>
         {/each}
-        {#each cell.events.slice(0, 3) as ev (ev.id)}
-          <div class="pill" style="background:{ev.colour}">{ev.title}</div>
+        {#each cell.events.slice(0, 3) as ev (ev.id + cell.key)}
+          <div class="pill" style="background:{ev.colour}">{ev.recur_freq ? '↻ ' : ''}{ev.title}</div>
         {/each}
         {#if cell.events.length > 3}
           <div class="more">+{cell.events.length - 3} more</div>
@@ -224,28 +259,62 @@
         <div class="empty">Nothing on this day</div>
       {/if}
 
-      {#if showForm}
-        <div class="form">
-          <input placeholder="What's happening?" bind:value={form.title} />
-          <div class="row">
-            <select bind:value={form.calendar}>
-              {#each calendars as c (c.slug)}
-                <option value={c.slug}>{c.label}</option>
-              {/each}
-            </select>
-            <input type="time" bind:value={form.time} />
-          </div>
-          <input placeholder="Location (optional)" bind:value={form.location} />
-          {#if invitesEnabled}
-            <input placeholder="Invite emails, comma separated (optional)" bind:value={form.emails} />
-          {/if}
-          <button class="primary" disabled={busy} onclick={createEvent}>
-            {busy ? 'Saving…' : 'Add event'}
-          </button>
+      <button class="primary" onclick={() => openForm(selected.key)}>＋ Add event this day</button>
+    </div>
+  </div>
+{/if}
+
+{#if showForm}
+  <div
+    class="overlay"
+    onclick={() => (showForm = false)}
+    onkeydown={(e) => e.key === 'Escape' && (showForm = false)}
+    role="presentation"
+  >
+    <div
+      class="modal card"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+      role="dialog"
+      tabindex="-1"
+    >
+      <div class="modal-head">
+        <div class="modal-title">New event</div>
+        <button class="close" onclick={() => (showForm = false)}>✕</button>
+      </div>
+
+      <div class="form">
+        <input placeholder="What's happening?" bind:value={form.title} />
+        <div class="row">
+          <input type="date" bind:value={form.date} />
+          <input type="time" bind:value={form.time} />
         </div>
-      {:else}
-        <button class="primary" onclick={() => (showForm = true)}>+ Add event</button>
-      {/if}
+        <div class="row">
+          <select bind:value={form.calendar}>
+            {#each calendars as c (c.slug)}
+              <option value={c.slug}>{c.label}</option>
+            {/each}
+          </select>
+          <select bind:value={form.repeat}>
+            {#each REPEATS as r (r.value)}
+              <option value={r.value}>{r.label}</option>
+            {/each}
+          </select>
+        </div>
+        {#if form.repeat}
+          <label class="until">
+            <span>Repeats until (optional)</span>
+            <input type="date" bind:value={form.until} min={form.date} />
+          </label>
+        {/if}
+        <input placeholder="Location (optional)" bind:value={form.location} />
+        {#if invitesEnabled}
+          <input placeholder="Invite emails, comma separated (optional)" bind:value={form.emails} />
+        {/if}
+        <button class="primary" disabled={busy || !form.title.trim()} onclick={createEvent}>
+          {busy ? 'Saving…' : 'Add event'}
+        </button>
+      </div>
     </div>
   </div>
 {/if}
@@ -256,9 +325,27 @@
   }
   .cal-head {
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto 1fr auto auto;
     align-items: center;
     margin-bottom: 10px;
+  }
+  .add {
+    background: var(--header);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 10px 16px;
+    border-radius: 999px;
+    margin-left: 10px;
+  }
+  .until {
+    display: block;
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .until input {
+    margin-top: 4px;
   }
   .month {
     text-align: center;

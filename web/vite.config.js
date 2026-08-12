@@ -17,7 +17,8 @@ export default defineConfig({
   ],
   server: {
     proxy: {
-      '/api': 'http://localhost:3000'
+      // Dev UI talks to the real stack on the Mac Mini.
+      '/api': process.env.API_TARGET || 'http://192.168.10.6'
     }
   },
   build: {

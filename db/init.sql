@@ -26,6 +26,10 @@ CREATE TABLE events (
   starts_at    TIMESTAMPTZ NOT NULL,
   ends_at      TIMESTAMPTZ NOT NULL,
   all_day      BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Recurrence: NULL freq = one-off. Stored as the rule, expanded at read time.
+  recur_freq     TEXT CHECK (recur_freq IN ('daily','weekly','monthly','yearly')),
+  recur_interval INT  NOT NULL DEFAULT 1 CHECK (recur_interval BETWEEN 1 AND 52),
+  recur_until    DATE,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT ends_after_starts CHECK (ends_at >= starts_at)
