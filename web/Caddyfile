@@ -1,0 +1,15 @@
+:80 {
+	# API and calendar feed proxy to the api container
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	# SPA
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+
+	encode gzip
+}

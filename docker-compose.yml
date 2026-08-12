@@ -16,6 +16,19 @@ services:
       timeout: 5s
       retries: 10
 
+  # Device integration layer. Host networking is REQUIRED — Sonos, Hue and
+  # Chromecast discovery all rely on SSDP/mDNS broadcast traffic, which does
+  # not cross a Docker bridge network. Binds :8123 directly on the host.
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      TZ: ${TZ:-Europe/London}
+    volumes:
+      - ha_config:/config
+      - /run/dbus:/run/dbus:ro
+
   api:
     build: ./api
     restart: unless-stopped
@@ -24,12 +37,17 @@ services:
       TZ: ${TZ:-Europe/London}
       WEATHER_LOC: ${WEATHER_LOC:-Bristol}
       PUBLIC_URL: ${PUBLIC_URL:-http://192.168.10.6}
+      # Home Assistant is on host networking, so reach it via the gateway.
+      HA_URL: ${HA_URL:-http://host.docker.internal:8123}
+      HA_TOKEN: ${HA_TOKEN:-}
       # Invites are only sent when these are set. Leave blank to disable.
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       INVITE_FROM: ${INVITE_FROM:-}
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     depends_on:
       db:
         condition: service_healthy
@@ -44,3 +62,4 @@ services:
 
 volumes:
   db_data:
+  ha_config:
