@@ -77,7 +77,12 @@ export default async function routes(app) {
       kids.map(async (kid) => {
         const items = await stateFor(kid.slug, day);
         const [{ rows: totals }, streak] = await Promise.all([
-          q('SELECT COALESCE(SUM(points), 0)::int AS total FROM kid_days WHERE kid_slug = $1', [kid.slug]),
+          // Balance = stars earned minus stars spent on claimed rewards.
+          q(
+            `SELECT COALESCE((SELECT SUM(points) FROM kid_days WHERE kid_slug = $1), 0)::int
+                  - COALESCE((SELECT SUM(cost) FROM rewards WHERE claimed_by = $1), 0)::int AS total`,
+            [kid.slug]
+          ),
           streakFor(kid.slug, day)
         ]);
         const doneCount = items.filter((i) => i.done).length;
@@ -153,20 +158,56 @@ export default async function routes(app) {
     return reply.status(204).send();
   });
 
-  // ── Rewards ──
-  app.get('/rewards', async () => {
+  // Star history for charts: one row per day, zero-filled client side.
+  app.get('/kids/:slug/history', async (req) => {
+    const days = Math.min(Number(req.query.days) || 14, 90);
     const { rows } = await q(
-      'SELECT * FROM rewards WHERE active ORDER BY cost'
+      `SELECT day, points, completed FROM kid_days
+        WHERE kid_slug = $1 AND day > CURRENT_DATE - $2::int
+        ORDER BY day`,
+      [req.params.slug, days]
     );
     return rows;
   });
 
-  app.post('/rewards/:id/claim', async (req, reply) => {
+  // ── Rewards ──
+  app.get('/rewards', async () => {
     const { rows } = await q(
-      'UPDATE rewards SET claimed_at = now() WHERE id = $1 RETURNING *',
+      'SELECT * FROM rewards WHERE active ORDER BY claimed_at NULLS FIRST, cost'
+    );
+    return rows;
+  });
+
+  // Claiming is parent-gated by PIN and spends the kid's star balance.
+  app.post('/rewards/:id/claim', async (req, reply) => {
+    const { kid_slug, pin } = req.body || {};
+    if (!kid_slug) return reply.status(400).send({ error: 'kid_slug required' });
+    if (pin !== (process.env.PARENT_PIN || '1234')) {
+      return reply.status(403).send({ error: 'Wrong PIN' });
+    }
+
+    const { rows: rw } = await q(
+      'SELECT * FROM rewards WHERE id = $1 AND active AND claimed_at IS NULL',
       [req.params.id]
     );
-    if (!rows.length) return reply.status(404).send({ error: 'not found' });
+    if (!rw.length) return reply.status(404).send({ error: 'reward not available' });
+    if (rw[0].kid_slug && rw[0].kid_slug !== kid_slug) {
+      return reply.status(400).send({ error: 'that reward belongs to someone else' });
+    }
+
+    const { rows: bal } = await q(
+      `SELECT COALESCE((SELECT SUM(points) FROM kid_days WHERE kid_slug = $1), 0)::int
+            - COALESCE((SELECT SUM(cost) FROM rewards WHERE claimed_by = $1), 0)::int AS total`,
+      [kid_slug]
+    );
+    if (bal[0].total < rw[0].cost) {
+      return reply.status(400).send({ error: `needs ${rw[0].cost - bal[0].total} more stars` });
+    }
+
+    const { rows } = await q(
+      'UPDATE rewards SET claimed_at = now(), claimed_by = $2 WHERE id = $1 RETURNING *',
+      [req.params.id, kid_slug]
+    );
     return rows[0];
   });
 }

@@ -95,6 +95,109 @@ export default async function routes(app) {
     return { ok: true };
   });
 
+  // ── Phone finder ──
+  // Phones running the HA Companion app register notify.mobile_app_* services.
+  app.get('/home/phones', async () => {
+    if (!configured()) return [];
+    const services = await ha('/api/services');
+    const notify = services.find((s) => s.domain === 'notify');
+    if (!notify) return [];
+    return Object.keys(notify.services)
+      .filter((s) => s.startsWith('mobile_app_'))
+      .map((s) => ({
+        service: s,
+        name: s
+          .replace('mobile_app_', '')
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (c) => c.toUpperCase())
+      }));
+  });
+
+  // Critical alert: pushes through silent mode / Do Not Disturb on both
+  // platforms so a lost phone actually makes noise.
+  app.post('/home/phones/:service/find', async (req, reply) => {
+    if (!configured()) return reply.status(503).send({ error: 'HA not configured' });
+    const service = req.params.service.replace(/[^a-z0-9_]/g, '');
+    await ha(`/api/services/notify/${service}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        title: '📍 Phone finder',
+        message: 'Someone at home is looking for this phone!',
+        data: {
+          // iOS: critical push at full volume
+          push: { sound: { name: 'default', critical: 1, volume: 1.0 } },
+          // Android: alarm-stream TTS, ignores silent mode
+          ttl: 0,
+          priority: 'high',
+          channel: 'alarm_stream_max',
+          media_stream: 'alarm_stream_max',
+          tts_text: 'Someone at home is looking for this phone!'
+        }
+      })
+    });
+    return { ok: true };
+  });
+
+  // ── Cameras (Blink & anything else HA exposes) ──
+  app.get('/home/cameras', async () => {
+    if (!configured()) return [];
+    const states = await ha('/api/states');
+    return states
+      .filter((s) => s.entity_id.startsWith('camera.'))
+      .map((s) => ({
+        entity_id: s.entity_id,
+        name: s.attributes.friendly_name || s.entity_id,
+        state: s.state,
+        motion: s.attributes.motion_detection ?? null
+      }));
+  });
+
+  // Proxy the JPEG so the HA token never reaches the browser.
+  app.get('/home/cameras/:entity/image', async (req, reply) => {
+    if (!configured()) return reply.status(503).send({ error: 'HA not configured' });
+    const entity = 'camera.' + req.params.entity.replace(/^camera\./, '').replace(/[^a-z0-9_]/g, '');
+    const res = await fetch(`${HA_URL}/api/camera_proxy/${entity}`, {
+      headers: { Authorization: `Bearer ${process.env.HA_TOKEN}` },
+      signal: AbortSignal.timeout(20_000)
+    });
+    if (!res.ok) return reply.status(res.status).send({ error: `camera ${res.status}` });
+    reply
+      .header('Content-Type', res.headers.get('content-type') || 'image/jpeg')
+      .header('Cache-Control', 'no-store');
+    return reply.send(Buffer.from(await res.arrayBuffer()));
+  });
+
+  // Ask a Blink camera to wake and take a fresh still (battery-friendly:
+  // only fires on an explicit tap, never on a poll).
+  app.post('/home/cameras/:entity/refresh', async (req, reply) => {
+    if (!configured()) return reply.status(503).send({ error: 'HA not configured' });
+    const entity = 'camera.' + req.params.entity.replace(/^camera\./, '').replace(/[^a-z0-9_]/g, '');
+    try {
+      await ha('/api/services/blink/trigger_camera', {
+        method: 'POST',
+        body: JSON.stringify({ entity_id: entity })
+      });
+    } catch {
+      // Non-Blink cameras don't need a trigger; the proxy image is live.
+    }
+    return { ok: true };
+  });
+
+  // Arm/disarm motion detection (Blink exposes an alarm_control_panel).
+  app.post('/home/cameras-arm', async (req, reply) => {
+    if (!configured()) return reply.status(503).send({ error: 'HA not configured' });
+    const arm = Boolean(req.body?.arm);
+    const states = await ha('/api/states');
+    const panels = states.filter((s) => s.entity_id.startsWith('alarm_control_panel.'));
+    for (const p of panels) {
+      await ha(`/api/services/alarm_control_panel/${arm ? 'alarm_arm_away' : 'alarm_disarm'}`, {
+        method: 'POST',
+        body: JSON.stringify({ entity_id: p.entity_id })
+      });
+    }
+    return { ok: true, panels: panels.length, armed: arm };
+  });
+
   // Fire any HA script/scene by id — the hook Alexa emulated-hue also uses.
   app.post('/home/scenes/:scene', async (req, reply) => {
     if (!configured()) return reply.status(503).send({ error: 'HA not configured' });

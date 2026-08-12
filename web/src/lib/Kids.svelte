@@ -3,16 +3,108 @@
 
   let kids = $state([]);
   let rewards = $state([]);
+  let history = $state({}); // slug -> [{day, points}]
   let celebrating = $state(null); // kid slug mid-celebration
   let error = $state('');
+
+  // Chore timer
+  const CHORES = [
+    { label: 'Tidy-up race', emoji: '🧸', mins: 10 },
+    { label: 'Get dressed', emoji: '👕', mins: 5 },
+    { label: 'Teeth', emoji: '🪥', mins: 2 },
+    { label: 'Quiet time', emoji: '📚', mins: 20 }
+  ];
+  let timer = $state(null); // {label, emoji, total, left}
+  let timerHandle = null;
+
+  // Reward claiming
+  let claiming = $state(null); // reward being claimed
+  let claimKid = $state('');
+  let claimPin = $state('');
+  let claimError = $state('');
 
   async function load() {
     try {
       const [k, r] = await Promise.all([api.get('/kids'), api.get('/rewards')]);
       kids = k;
       rewards = r.filter((rw) => !rw.claimed_at);
+      const hists = await Promise.all(
+        k.map((kid) => api.get('/kids/' + kid.slug + '/history?days=14'))
+      );
+      const h = {};
+      k.forEach((kid, i) => (h[kid.slug] = hists[i]));
+      history = h;
     } catch (e) {
       error = e.message;
+    }
+  }
+
+  // Last 14 days, zero-filled, for the mini chart
+  function chartDays(slug) {
+    const rows = history[slug] || [];
+    const out = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 864e5);
+      const key =
+        d.getFullYear() +
+        '-' +
+        String(d.getMonth() + 1).padStart(2, '0') +
+        '-' +
+        String(d.getDate()).padStart(2, '0');
+      const row = rows.find((r) => r.day === key);
+      out.push({ key, points: row ? row.points : 0, completed: row ? row.completed : false });
+    }
+    return out;
+  }
+
+  function startTimer(chore) {
+    stopTimer();
+    timer = { ...chore, total: chore.mins * 60, left: chore.mins * 60 };
+    timerHandle = setInterval(() => {
+      if (!timer) return;
+      timer.left -= 1;
+      if (timer.left <= 0) {
+        stopTimer(true);
+      }
+    }, 1000);
+  }
+
+  function stopTimer(finished) {
+    if (timerHandle) clearInterval(timerHandle);
+    timerHandle = null;
+    if (finished) {
+      bigConfetti();
+      timer = { ...timer, left: 0, finished: true };
+      setTimeout(() => (timer = null), 5000);
+    } else {
+      timer = null;
+    }
+  }
+
+  function fmtTime(s) {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return m + ':' + (sec < 10 ? '0' : '') + sec;
+  }
+
+  function openClaim(reward) {
+    claiming = reward;
+    claimKid = reward.kid_slug || (kids[0] && kids[0].slug) || '';
+    claimPin = '';
+    claimError = '';
+  }
+
+  async function confirmClaim() {
+    try {
+      await api.post('/rewards/' + claiming.id + '/claim', {
+        kid_slug: claimKid,
+        pin: claimPin
+      });
+      claiming = null;
+      bigConfetti();
+      await load();
+    } catch (e) {
+      claimError = e.message;
     }
   }
 
@@ -133,21 +225,112 @@
       {:else if kid.complete}
         <div class="congrats subtle">🌟 All done today!</div>
       {/if}
+
+      <!-- 14-day star history -->
+      <div class="chart">
+        {#each chartDays(kid.slug) as d (d.key)}
+          <div class="chart-col">
+            <div
+              class="chart-bar"
+              class:hit={d.completed}
+              style="height:{Math.min(d.points, 10) * 10}%;background:{kid.colour}"
+            ></div>
+          </div>
+        {/each}
+      </div>
+      <div class="chart-label">last 14 days</div>
     </div>
   {/each}
 </div>
 
+<!-- Chore timers -->
+<div class="card timers">
+  <div class="t-title">⏱ Beat the clock</div>
+  {#if timer}
+    <div class="t-active" class:t-done={timer.finished}>
+      <div class="t-emoji">{timer.emoji}</div>
+      <div class="t-name">{timer.finished ? '🎉 ' + timer.label + ' — done!' : timer.label}</div>
+      <div class="t-clock">{timer.finished ? '⭐' : fmtTime(timer.left)}</div>
+      <div class="t-bar">
+        <div
+          class="t-fill"
+          class:urgent={!timer.finished && timer.left / timer.total < 0.25}
+          style="width:{(timer.left / timer.total) * 100}%"
+        ></div>
+      </div>
+      {#if !timer.finished}
+        <button class="t-stop" onclick={() => stopTimer(false)}>Stop</button>
+      {/if}
+    </div>
+  {:else}
+    <div class="t-grid">
+      {#each CHORES as chore (chore.label)}
+        <button class="t-preset" onclick={() => startTimer(chore)}>
+          <span class="t-preset-emoji">{chore.emoji}</span>
+          <span>{chore.label}</span>
+          <span class="t-mins">{chore.mins} min</span>
+        </button>
+      {/each}
+    </div>
+  {/if}
+</div>
+
 {#if rewards.length}
   <div class="card rewards">
-    <div class="rewards-title">🎁 Saving up for</div>
+    <div class="rewards-title">🎁 Saving up for <span class="rewards-hint">tap to claim</span></div>
     <div class="rewards-grid">
       {#each rewards as r (r.id)}
-        <div class="reward">
+        <button class="reward" onclick={() => openClaim(r)}>
           <div class="reward-emoji">{r.emoji}</div>
           <div class="reward-label">{r.label}</div>
           <div class="reward-cost">⭐ {r.cost}</div>
-        </div>
+        </button>
       {/each}
+    </div>
+  </div>
+{/if}
+
+{#if claiming}
+  <div
+    class="overlay"
+    onclick={() => (claiming = null)}
+    onkeydown={(e) => e.key === 'Escape' && (claiming = null)}
+    role="presentation"
+  >
+    <div
+      class="modal card"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+      role="dialog"
+      tabindex="-1"
+    >
+      <div class="claim-head">{claiming.emoji} Claim "{claiming.label}"</div>
+      <div class="claim-cost">costs ⭐ {claiming.cost}</div>
+
+      <div class="claim-kids">
+        {#each kids as kid (kid.slug)}
+          <button
+            class="claim-kid"
+            class:sel={claimKid === kid.slug}
+            style={claimKid === kid.slug ? 'border-color:' + kid.colour : ''}
+            onclick={() => (claimKid = kid.slug)}
+          >
+            {kid.emoji} {kid.name}
+            <span class="claim-bal">⭐ {kid.stars}</span>
+          </button>
+        {/each}
+      </div>
+
+      <input
+        class="pin"
+        type="password"
+        inputmode="numeric"
+        placeholder="Parent PIN"
+        bind:value={claimPin}
+        onkeydown={(e) => e.key === 'Enter' && confirmClaim()}
+      />
+      {#if claimError}<div class="claim-err">{claimError}</div>{/if}
+      <button class="claim-go" onclick={confirmClaim}>Claim it! 🎉</button>
     </div>
   </div>
 {/if}
@@ -324,5 +507,209 @@
     padding: 8px 12px;
     margin-bottom: 8px;
     font-size: 13px;
+  }
+
+  /* Star history chart */
+  .chart {
+    display: grid;
+    grid-template-columns: repeat(14, 1fr);
+    grid-gap: 3px;
+    height: 46px;
+    align-items: end;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+  .chart-col {
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+  }
+  .chart-bar {
+    width: 100%;
+    min-height: 3px;
+    border-radius: 3px 3px 0 0;
+    opacity: 0.45;
+  }
+  .chart-bar.hit {
+    opacity: 1;
+  }
+  .chart-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: right;
+    margin-top: 2px;
+  }
+
+  /* Chore timers */
+  .timers {
+    margin-top: 16px;
+    padding: 16px;
+  }
+  .t-title {
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .t-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-gap: 10px;
+  }
+  @media (max-width: 700px) {
+    .t-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  .t-preset {
+    display: block;
+    background: var(--bg);
+    border-radius: 12px;
+    padding: 14px 8px;
+    text-align: center;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .t-preset-emoji {
+    display: block;
+    font-size: 28px;
+    margin-bottom: 4px;
+  }
+  .t-mins {
+    display: block;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .t-active {
+    text-align: center;
+    padding: 8px 0;
+  }
+  .t-emoji {
+    font-size: 44px;
+  }
+  .t-name {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 4px 0;
+  }
+  .t-clock {
+    font-size: 56px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    line-height: 1.1;
+  }
+  .t-bar {
+    height: 14px;
+    background: var(--bg);
+    border-radius: 7px;
+    overflow: hidden;
+    margin: 12px auto;
+    max-width: 480px;
+  }
+  .t-fill {
+    height: 100%;
+    background: #16a34a;
+    border-radius: 7px;
+    -webkit-transition: width 1s linear;
+    transition: width 1s linear;
+  }
+  .t-fill.urgent {
+    background: #dc2626;
+  }
+  .t-stop {
+    color: var(--text-muted);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 8px 20px;
+  }
+  .t-done .t-name {
+    color: #d97706;
+  }
+
+  /* Reward claiming */
+  .rewards-hint {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-left: 8px;
+  }
+  .overlay {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: rgba(15, 23, 42, 0.55);
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal {
+    width: 100%;
+    max-width: 420px;
+    padding: 20px;
+    text-align: center;
+  }
+  .claim-head {
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .claim-cost {
+    color: var(--text-muted);
+    margin: 4px 0 14px;
+  }
+  .claim-kids {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-gap: 10px;
+    margin-bottom: 12px;
+  }
+  .claim-kid {
+    padding: 14px 8px;
+    border-radius: 12px;
+    background: var(--bg);
+    border: 3px solid transparent;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .claim-kid.sel {
+    background: #fff;
+  }
+  .claim-bal {
+    display: block;
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .pin {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 18px;
+    text-align: center;
+    letter-spacing: 6px;
+    -webkit-appearance: none;
+  }
+  .claim-err {
+    color: #b91c1c;
+    font-size: 13px;
+    margin-top: 8px;
+  }
+  .claim-go {
+    display: block;
+    width: 100%;
+    margin-top: 12px;
+    background: var(--header);
+    color: #fff;
+    padding: 14px;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 700;
   }
 </style>

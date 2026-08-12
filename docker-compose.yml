@@ -46,6 +46,9 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       INVITE_FROM: ${INVITE_FROM:-}
+      PARENT_PIN: ${PARENT_PIN:-1234}
+    volumes:
+      - ./photos:/photos:ro
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     depends_on:

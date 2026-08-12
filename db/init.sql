@@ -106,7 +106,8 @@ CREATE TABLE kid_days (
   PRIMARY KEY (kid_slug, day)
 );
 
--- Things kids are saving their stars up for.
+-- Things kids are saving their stars up for. Claiming spends stars:
+-- balance = SUM(kid_days.points) - SUM(claimed rewards' cost).
 CREATE TABLE rewards (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   kid_slug    TEXT REFERENCES kids(slug) ON DELETE CASCADE,  -- NULL = any kid
@@ -114,6 +115,7 @@ CREATE TABLE rewards (
   emoji       TEXT NOT NULL DEFAULT '🎁',
   cost        INT  NOT NULL,
   claimed_at  TIMESTAMPTZ,
+  claimed_by  TEXT REFERENCES kids(slug) ON DELETE SET NULL,
   active      BOOLEAN NOT NULL DEFAULT TRUE
 );
 
@@ -132,3 +134,35 @@ CREATE TABLE birthdays (
   month       INT  NOT NULL CHECK (month BETWEEN 1 AND 12),
   birth_year  INT
 );
+
+-- ─────────────────────────────────────────────
+-- HOUSEHOLD GLUE
+-- ─────────────────────────────────────────────
+CREATE TABLE shopping_items (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  label      TEXT NOT NULL,
+  emoji      TEXT,
+  ticked_at  TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- One dinner per calendar day.
+CREATE TABLE meals (
+  day    DATE PRIMARY KEY,
+  title  TEXT NOT NULL,
+  emoji  TEXT NOT NULL DEFAULT '🍽️',
+  notes  TEXT
+);
+
+-- Simple key/value settings, editable from the dashboard.
+CREATE TABLE settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+INSERT INTO settings (key, value) VALUES
+  ('morning_start',  '07:00'),   -- countdown appears from here...
+  ('morning_leave',  '08:30'),   -- ...counting down to here
+  ('school_days',    '12345'),   -- ISO weekday numbers, Mon=1
+  ('bedtime_start',  '19:00'),   -- dashboard dims from here
+  ('bedtime_end',    '06:30');
