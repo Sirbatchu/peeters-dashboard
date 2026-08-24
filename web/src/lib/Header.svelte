@@ -169,4 +169,45 @@
     padding: 3px 10px;
     margin-left: 6px;
   }
+
+  /* Landscape / short viewports — shrink the header so the content below fits. */
+  @media (max-height: 850px) {
+    header {
+      padding: 8px 20px 4px;
+    }
+    .clock {
+      font-size: 32px;
+    }
+    .secs {
+      font-size: 16px;
+    }
+    .date {
+      font-size: 13px;
+      margin-top: 1px;
+    }
+    .brand-name {
+      font-size: 20px;
+    }
+    .brand-sub {
+      font-size: 10px;
+      letter-spacing: 2px;
+    }
+    .now {
+      font-size: 26px;
+    }
+    .w-icon {
+      font-size: 21px;
+    }
+    .desc {
+      font-size: 12px;
+      margin-top: 1px;
+    }
+    .forecast {
+      margin-top: 3px;
+    }
+    .f-day {
+      font-size: 11px;
+      padding: 2px 8px;
+    }
+  }
 </style>

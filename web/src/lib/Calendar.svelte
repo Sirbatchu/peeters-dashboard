@@ -391,6 +391,34 @@
     font-weight: 600;
     margin-bottom: 2px;
   }
+  /* Landscape / short viewports — trim the grid so all six rows fit. */
+  @media (max-height: 850px) {
+    .card {
+      padding: 10px;
+    }
+    .cal-head {
+      margin-bottom: 6px;
+    }
+    .month {
+      font-size: 18px;
+    }
+    .nav {
+      font-size: 22px;
+      padding: 2px 12px;
+    }
+    .add {
+      padding: 8px 14px;
+      font-size: 13px;
+    }
+    .dayname {
+      padding: 2px 0;
+      font-size: 11px;
+    }
+    .cell {
+      min-height: 56px;
+    }
+  }
+
   .pill {
     font-size: 10px;
     color: #fff;

@@ -218,4 +218,34 @@
     margin-bottom: 8px;
     font-size: 13px;
   }
+
+  /* Landscape / short viewports — compact the player cards. */
+  @media (max-height: 850px) {
+    /* Three across in landscape — fewer rows to scroll through. */
+    .players {
+      grid-template-columns: repeat(3, 1fr);
+    }
+    .player {
+      padding: 11px;
+    }
+    .name {
+      font-size: 16px;
+    }
+    .track {
+      font-size: 12px;
+    }
+    .btn {
+      font-size: 22px;
+      padding: 6px 11px;
+    }
+    .btn.big {
+      font-size: 30px;
+    }
+    .announce {
+      padding: 11px;
+    }
+    .empty {
+      padding: 16px;
+    }
+  }
 </style>

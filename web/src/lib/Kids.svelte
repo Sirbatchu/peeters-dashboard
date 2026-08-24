@@ -243,6 +243,7 @@
   {/each}
 </div>
 
+<div class="lower">
 <!-- Chore timers -->
 <div class="card timers">
   <div class="t-title">⏱ Beat the clock</div>
@@ -289,6 +290,7 @@
     </div>
   </div>
 {/if}
+</div>
 
 {#if claiming}
   <div
@@ -458,6 +460,64 @@
   .item-emoji {
     font-size: 20px;
   }
+  /* Landscape / short viewports — compact so the board fits with little
+     or no scrolling. Tap targets stay above the 44px iOS minimum. */
+  @media (max-height: 850px) {
+    .card {
+      padding: 11px;
+    }
+    .item {
+      padding: 7px 9px;
+      font-size: 15px;
+      margin-bottom: 5px;
+      grid-gap: 8px;
+    }
+    .box {
+      width: 26px;
+      height: 26px;
+      font-size: 16px;
+    }
+    .item-emoji {
+      font-size: 17px;
+    }
+    .chart {
+      height: 32px;
+      margin-top: 8px;
+      padding-top: 7px;
+    }
+    /* Timers and rewards sit side by side when there's width to spare. */
+    .lower {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-gap: 12px;
+      align-items: start;
+    }
+    .timers,
+    .rewards {
+      margin-top: 10px;
+      padding: 11px;
+    }
+    .t-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .rewards-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+    .t-preset {
+      padding: 9px 6px;
+      font-size: 13px;
+    }
+    .t-preset-emoji {
+      font-size: 22px;
+    }
+    .reward {
+      padding: 10px 6px;
+    }
+    .reward-emoji {
+      font-size: 22px;
+    }
+  }
+
   .congrats {
     text-align: center;
     font-size: 18px;

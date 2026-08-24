@@ -202,6 +202,42 @@
     font-size: 20px;
     vertical-align: -2px;
   }
+  /* Landscape / short viewports (iPad 4 landscape is 1024x768).
+     Compact the chrome so all six calendar rows stay on screen. */
+  @media (max-height: 850px) {
+    main {
+      padding: 10px 12px;
+    }
+    .tabs {
+      grid-gap: 8px;
+      padding: 8px 12px 0;
+    }
+    .tab {
+      padding: 8px 6px;
+      font-size: 14px;
+    }
+    .tab-icon {
+      font-size: 16px;
+      margin-right: 5px;
+    }
+    .countdown {
+      margin-top: 6px;
+      padding: 7px 14px;
+      font-size: 15px;
+    }
+    .countdown strong {
+      font-size: 18px;
+    }
+    .cd-icon {
+      font-size: 20px;
+    }
+    .bedtime-chip {
+      margin-top: 6px;
+      padding: 5px 14px;
+      font-size: 12px;
+    }
+  }
+
   .offline {
     background: #b45309;
     color: #fff;
