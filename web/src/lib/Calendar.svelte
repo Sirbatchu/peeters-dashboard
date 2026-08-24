@@ -322,6 +322,9 @@
 <style>
   .cal {
     padding: 14px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
   }
   .cal-head {
     display: grid;
@@ -363,6 +366,13 @@
     grid-template-columns: repeat(7, 1fr);
     grid-gap: 4px;
   }
+  .grid {
+    /* Six week rows dividing whatever height is left. minmax(0,1fr) lets
+       them shrink below content height instead of overflowing the screen. */
+    grid-template-rows: repeat(6, minmax(0, 1fr));
+    flex: 1 1 auto;
+    min-height: 0;
+  }
   .dayname {
     text-align: center;
     font-size: 12px;
@@ -371,7 +381,7 @@
     padding: 4px 0;
   }
   .cell {
-    min-height: 76px;
+    min-height: 0;
     background: var(--bg);
     border-radius: 8px;
     padding: 4px;
@@ -415,7 +425,7 @@
       font-size: 11px;
     }
     .cell {
-      min-height: 56px;
+      min-height: 0;
     }
   }
 

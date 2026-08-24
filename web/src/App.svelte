@@ -156,10 +156,13 @@
     z-index: 1;
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    height: 100%;
   }
   main {
-    flex: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     padding: 16px;
     max-width: 1100px;
     width: 100%;
