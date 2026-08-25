@@ -65,6 +65,24 @@
     return () => clearInterval(iv);
   });
 
+  // Re-fit whenever the viewport changes or the rendered cells change.
+  $effect(() => {
+    grid; // re-run when the month or events change
+    var raf = requestAnimationFrame(fitGrid);
+    var onResize = function () { setTimeout(fitGrid, 120); };
+    // Slow re-fit catches layout shifts we do not get an event for,
+    // e.g. the bedtime chip appearing at 19:00.
+    var poll = setInterval(fitGrid, 15000);
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    return function () {
+      cancelAnimationFrame(raf);
+      clearInterval(poll);
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+    };
+  });
+
   function ymd(d) {
     return (
       d.getFullYear() +
@@ -109,6 +127,24 @@
 
   function move(delta) {
     cursor = new Date(cursor.getFullYear(), cursor.getMonth() + delta, 1);
+  }
+
+  /**
+   * Size the six week rows from the space actually left below the grid.
+   * Measuring getBoundingClientRect().top means we never have to model the
+   * header/tabs/chip heights - which is what got this wrong on the iPad,
+   * where the chrome renders taller than on desktop.
+   */
+  let gridEl = $state(null);
+
+  function fitGrid() {
+    if (!gridEl) return;
+    var top = gridEl.getBoundingClientRect().top;
+    var avail = window.innerHeight - top - 18; // 18px breathing room at the bottom
+    var gaps = 5 * 4; // five 4px gaps between six rows
+    var h = Math.floor((avail - gaps) / 6);
+    if (h < 34) h = 34; // never collapse to unreadable
+    gridEl.style.gridAutoRows = h + 'px';
   }
 
   function openDay(cell) {
@@ -176,7 +212,7 @@
     {#each DAY_NAMES as d (d)}<div class="dayname">{d}</div>{/each}
   </div>
 
-  <div class="grid">
+  <div class="grid" bind:this={gridEl}>
     {#each grid as cell (cell.key)}
       <button
         class="cell"
@@ -322,9 +358,6 @@
 <style>
   .cal {
     padding: 14px;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
   }
   .cal-head {
     display: grid;
@@ -366,12 +399,11 @@
     grid-template-columns: repeat(7, 1fr);
     grid-gap: 4px;
   }
+  /* Row height is set in JS by fitGrid() from the real measured space.
+     Safari 10 mis-handles both fr rows and flex-shrink on grid children,
+     so explicit px is the only reliable option on the iPad. */
   .grid {
-    /* Six week rows dividing whatever height is left. minmax(0,1fr) lets
-       them shrink below content height instead of overflowing the screen. */
-    grid-template-rows: repeat(6, minmax(0, 1fr));
-    flex: 1 1 auto;
-    min-height: 0;
+    grid-auto-rows: 76px;
   }
   .dayname {
     text-align: center;
@@ -423,6 +455,10 @@
     .dayname {
       padding: 2px 0;
       font-size: 11px;
+    }
+    /* Fallback if JS sizing has not run yet. */
+    .grid {
+      grid-auto-rows: 56px;
     }
     .cell {
       min-height: 0;
