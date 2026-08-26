@@ -22,11 +22,15 @@
   ];
 
   function blankForm(date) {
+    var d = date || ymd(new Date());
     return {
       title: '',
       calendar: 'family',
-      date: date || ymd(new Date()),
+      date: d,
       time: '10:00',
+      endDate: d,
+      endTime: '11:00',
+      allDay: false,
       location: '',
       emails: '',
       repeat: '',
@@ -157,15 +161,28 @@
     busy = true;
     error = '';
     try {
-      const starts = form.date + 'T' + form.time + ':00';
+      // All-day events span whole days; timed ones use the chosen times.
+      const endDay = form.endDate || form.date;
+      const starts = new Date(
+        form.allDay ? form.date + 'T00:00:00' : form.date + 'T' + form.time + ':00'
+      );
+      const ends = new Date(
+        form.allDay ? endDay + 'T23:59:59' : endDay + 'T' + (form.endTime || form.time) + ':00'
+      );
+      if (ends < starts) {
+        error = 'The end must be after the start';
+        busy = false;
+        return;
+      }
       // "fortnightly" is weekly with interval 2 under the hood
       const freq = form.repeat === 'fortnightly' ? 'weekly' : form.repeat || null;
       const created = await api.post('/events', {
         title: form.title.trim(),
         calendar: form.calendar,
         location: form.location.trim() || null,
-        starts_at: new Date(starts).toISOString(),
-        ends_at: new Date(new Date(starts).getTime() + 3600000).toISOString(),
+        all_day: form.allDay,
+        starts_at: starts.toISOString(),
+        ends_at: ends.toISOString(),
         recur_freq: freq,
         recur_interval: form.repeat === 'fortnightly' ? 2 : 1,
         recur_until: form.repeat && form.until ? form.until : null
@@ -321,10 +338,24 @@
 
       <div class="form">
         <input placeholder="What's happening?" bind:value={form.title} />
-        <div class="row">
-          <input type="date" bind:value={form.date} />
-          <input type="time" bind:value={form.time} />
-        </div>
+        <label class="fld">
+          <span>Starts</span>
+          <span class="pair">
+            <input type="date" bind:value={form.date} />
+            {#if !form.allDay}<input type="time" bind:value={form.time} />{/if}
+          </span>
+        </label>
+        <label class="fld">
+          <span>Ends</span>
+          <span class="pair">
+            <input type="date" bind:value={form.endDate} min={form.date} />
+            {#if !form.allDay}<input type="time" bind:value={form.endTime} />{/if}
+          </span>
+        </label>
+        <label class="allday">
+          <input type="checkbox" bind:checked={form.allDay} />
+          <span>All day / no set times</span>
+        </label>
         <div class="row">
           <select bind:value={form.calendar}>
             {#each calendars as c (c.slug)}
@@ -373,6 +404,34 @@
     padding: 10px 16px;
     border-radius: 999px;
     margin-left: 10px;
+  }
+  .fld {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .fld > span:first-child {
+    display: block;
+    margin-bottom: 3px;
+    font-weight: 600;
+  }
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-gap: 8px;
+  }
+  .allday {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 14px;
+    color: var(--text);
+  }
+  .allday input {
+    width: 20px;
+    height: 20px;
+    vertical-align: -4px;
+    margin-right: 6px;
   }
   .until {
     display: block;

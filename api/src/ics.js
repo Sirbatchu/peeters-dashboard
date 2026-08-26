@@ -41,8 +41,10 @@ function vevent(ev, { organizer, attendees = [] } = {}) {
     ev.all_day
       ? `DTSTART;VALUE=DATE:${dateOnly(ev.starts_at)}`
       : `DTSTART:${stamp(ev.starts_at)}`,
+    // For all-day events RFC 5545 DTEND is exclusive, so push it to the
+    // day after the last day the event actually covers.
     ev.all_day
-      ? `DTEND;VALUE=DATE:${dateOnly(ev.ends_at)}`
+      ? `DTEND;VALUE=DATE:${dateOnly(new Date(new Date(ev.ends_at).getTime() + 864e5))}`
       : `DTEND:${stamp(ev.ends_at)}`,
     `SUMMARY:${esc(ev.title)}`,
     `SEQUENCE:${ev.sequence ?? 0}`
