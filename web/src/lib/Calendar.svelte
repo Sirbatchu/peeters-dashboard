@@ -1,6 +1,15 @@
 <script>
   import { api } from '../api.js';
 
+  // full: calendar takes the whole screen (App hides the header and tabs)
+  let { full = $bindable(false) } = $props();
+
+  const VIEWS = [
+    { id: 'week', label: 'Week' },
+    { id: 'month', label: 'Month' },
+    { id: 'year', label: 'Year' }
+  ];
+  let view = $state(savedView());
   let events = $state([]);
   let calendars = $state([]);
   let birthdays = $state([]);
@@ -46,14 +55,80 @@
 
   const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+  // Remembered per device so the wall tablet comes back on its chosen view.
+  function savedView() {
+    try {
+      var v = localStorage.getItem('calView');
+      if (v === 'week' || v === 'month' || v === 'year') return v;
+    } catch (e) {
+      /* private mode etc. */
+    }
+    return 'month';
+  }
+
+  function setView(v) {
+    // Jumping into week view from the current month lands on this week,
+    // not the week of the 1st.
+    var today = new Date();
+    if (
+      v === 'week' &&
+      cursor.getFullYear() === today.getFullYear() &&
+      cursor.getMonth() === today.getMonth()
+    ) {
+      cursor = today;
+    }
+    view = v;
+    try {
+      localStorage.setItem('calView', v);
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  function addDays(d, n) {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+  }
+
+  function mondayOf(d) {
+    return addDays(d, -((d.getDay() + 6) % 7));
+  }
+
+  // The date span the current view shows; events are fetched for exactly
+  // this window, so any month or year can be browsed, not just ~1 year ahead.
+  let range = $derived.by(() => {
+    if (view === 'week') {
+      var ws = mondayOf(cursor);
+      return { start: ws, end: addDays(ws, 7) };
+    }
+    if (view === 'year') {
+      return {
+        start: new Date(cursor.getFullYear(), 0, 1),
+        end: new Date(cursor.getFullYear() + 1, 0, 1)
+      };
+    }
+    var ms = mondayOf(new Date(cursor.getFullYear(), cursor.getMonth(), 1));
+    return { start: ms, end: addDays(ms, 42) };
+  });
+
+  var loadSeq = 0;
+
   async function load() {
+    var seq = ++loadSeq;
+    var r = range;
     try {
       const [evs, cals, bds, inv] = await Promise.all([
-        api.get('/events'),
+        api.get(
+          '/events?start=' +
+            encodeURIComponent(r.start.toISOString()) +
+            '&end=' +
+            encodeURIComponent(r.end.toISOString())
+        ),
         api.get('/calendars'),
         api.get('/birthdays'),
         api.get('/invites/status')
       ]);
+      if (seq !== loadSeq) return; // a newer range was requested meanwhile
+      error = '';
       events = evs;
       calendars = cals;
       birthdays = bds;
@@ -64,6 +139,7 @@
   }
 
   $effect(() => {
+    range; // re-fetch whenever the visible window moves
     load();
     const iv = setInterval(load, 5 * 60 * 1000);
     return () => clearInterval(iv);
@@ -71,7 +147,8 @@
 
   // Re-fit whenever the viewport changes or the rendered cells change.
   $effect(() => {
-    grid; // re-run when the month or events change
+    grid; // re-run when the view, period or events change
+    full;
     var raf = requestAnimationFrame(fitGrid);
     var onResize = function () { setTimeout(fitGrid, 120); };
     // Slow re-fit catches layout shifts we do not get an event for,
@@ -97,40 +174,98 @@
     );
   }
 
-  let grid = $derived.by(() => {
-    const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-    const startOffset = (first.getDay() + 6) % 7; // Monday-first
-    const cells = [];
-    const todayStr = ymd(new Date());
-    for (let i = 0; i < 42; i++) {
-      const d = new Date(cursor.getFullYear(), cursor.getMonth(), 1 - startOffset + i);
-      const key = ymd(d);
-      const dayEvents = events.filter((e) => {
-        const s = ymd(new Date(e.starts_at));
-        const en = ymd(new Date(e.ends_at));
-        return key >= s && key <= en;
-      });
-      const bds = birthdays.filter(
-        (b) => b.month === d.getMonth() + 1 && b.day === d.getDate()
-      );
-      cells.push({
-        date: d,
-        key,
-        inMonth: d.getMonth() === cursor.getMonth(),
-        isToday: key === todayStr,
-        events: dayEvents,
-        birthdays: bds
-      });
-    }
-    return cells;
+  // Day key -> events on that day, built once per fetch. A year view has
+  // 500+ cells, so filtering the whole event list per cell is too slow on
+  // the old iPad.
+  let byDay = $derived.by(() => {
+    var map = {};
+    events.forEach(function (e) {
+      var d = new Date(e.starts_at);
+      d = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      var last = ymd(new Date(e.ends_at));
+      for (var i = 0; i < 400; i++) {
+        var k = ymd(d);
+        if (k > last) break;
+        (map[k] = map[k] || []).push(e);
+        d = addDays(d, 1);
+      }
+    });
+    return map;
   });
 
-  let monthLabel = $derived(
-    cursor.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
-  );
+  function dayCell(d, month, todayStr) {
+    var key = ymd(d);
+    return {
+      date: d,
+      key: key,
+      inMonth: month == null || d.getMonth() === month,
+      isToday: key === todayStr,
+      events: byDay[key] || [],
+      birthdays: birthdays.filter(function (b) {
+        return b.month === d.getMonth() + 1 && b.day === d.getDate();
+      })
+    };
+  }
+
+  function monthCells(year, month, todayStr) {
+    var start = mondayOf(new Date(year, month, 1));
+    var cells = [];
+    for (var i = 0; i < 42; i++) cells.push(dayCell(addDays(start, i), month, todayStr));
+    return cells;
+  }
+
+  // month: 42 day cells; week: 7; year: 12 mini-months of 42 cells each.
+  let grid = $derived.by(() => {
+    var todayStr = ymd(new Date());
+    if (view === 'week') {
+      var ws = mondayOf(cursor);
+      var days = [];
+      for (var i = 0; i < 7; i++) days.push(dayCell(addDays(ws, i), null, todayStr));
+      return days;
+    }
+    if (view === 'year') {
+      var months = [];
+      for (var m = 0; m < 12; m++) {
+        months.push({
+          month: m,
+          label: new Date(cursor.getFullYear(), m, 1).toLocaleDateString('en-GB', { month: 'long' }),
+          cells: monthCells(cursor.getFullYear(), m, todayStr)
+        });
+      }
+      return months;
+    }
+    return monthCells(cursor.getFullYear(), cursor.getMonth(), todayStr);
+  });
+
+  let periodLabel = $derived.by(() => {
+    if (view === 'year') return String(cursor.getFullYear());
+    if (view === 'week') {
+      var ws = mondayOf(cursor);
+      var we = addDays(ws, 6);
+      var a = ws.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      var b = we.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      return a + ' – ' + b;
+    }
+    return cursor.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  });
 
   function move(delta) {
-    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + delta, 1);
+    if (view === 'week') cursor = addDays(cursor, 7 * delta);
+    else if (view === 'year') cursor = new Date(cursor.getFullYear() + delta, cursor.getMonth(), 1);
+    else cursor = new Date(cursor.getFullYear(), cursor.getMonth() + delta, 1);
+  }
+
+  function goToday() {
+    cursor = new Date();
+  }
+
+  function openMonth(m) {
+    cursor = new Date(cursor.getFullYear(), m, 1);
+    setView('month');
+  }
+
+  function timeOf(ev) {
+    return new Date(ev.starts_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   }
 
   /**
@@ -140,15 +275,24 @@
    * where the chrome renders taller than on desktop.
    */
   let gridEl = $state(null);
+  let miniRow = $state(16); // day-row height inside the year view's mini-months
 
   function fitGrid() {
     if (!gridEl) return;
     var top = gridEl.getBoundingClientRect().top;
     var avail = window.innerHeight - top - 18; // 18px breathing room at the bottom
-    var gaps = 5 * 4; // five 4px gaps between six rows
-    var h = Math.floor((avail - gaps) / 6);
-    if (h < 34) h = 34; // never collapse to unreadable
+    // month: 6 week rows, 4px gaps; week: one tall row; year: 3 rows of months
+    var rows = view === 'month' ? 6 : view === 'year' ? 3 : 1;
+    var gap = view === 'year' ? 10 : 4;
+    var h = Math.floor((avail - (rows - 1) * gap) / rows);
+    var floor = view === 'year' ? 120 : 34; // never collapse to unreadable
+    if (h < floor) h = floor;
     gridEl.style.gridAutoRows = h + 'px';
+    if (view === 'year') {
+      // month title (18) + day letters (13) + padding (12), then 6 rows
+      var r = Math.floor((h - 43) / 6);
+      miniRow = r < 12 ? 12 : r;
+    }
   }
 
   function openDay(cell) {
@@ -218,38 +362,108 @@
 <div class="card cal">
   <div class="cal-head">
     <button class="nav" onclick={() => move(-1)}>‹</button>
-    <div class="month">{monthLabel}</div>
+    <div class="month">{periodLabel}</div>
     <button class="nav" onclick={() => move(1)}>›</button>
+    <div class="views">
+      {#each VIEWS as v (v.id)}
+        <button class="view" class:on={view === v.id} onclick={() => setView(v.id)}>{v.label}</button>
+      {/each}
+    </div>
+    <button class="today-btn" onclick={goToday}>Today</button>
+    {#if !full}
+      <button class="full-btn" onclick={() => (full = true)} title="Full screen">⛶</button>
+    {/if}
     <button class="add" onclick={() => openForm()}>＋ Add event</button>
   </div>
 
   {#if error}<div class="error">{error}</div>{/if}
 
-  <div class="daynames">
-    {#each DAY_NAMES as d (d)}<div class="dayname">{d}</div>{/each}
-  </div>
+  {#if view === 'year'}
+    <div class="year" bind:this={gridEl}>
+      {#each grid as mo (mo.month)}
+        <div class="mini">
+          <button class="mini-title" onclick={() => openMonth(mo.month)}>{mo.label}</button>
+          <div class="mini-grid">
+            {#each DAY_NAMES as d (d)}<div class="mini-dn">{d.charAt(0)}</div>{/each}
+          </div>
+          <div class="mini-grid" style="grid-auto-rows:{miniRow}px">
+            {#each mo.cells as cell (cell.key)}
+              {#if cell.inMonth}
+                <button
+                  class="mini-day"
+                  class:today={cell.isToday}
+                  class:busy={cell.events.length || cell.birthdays.length}
+                  onclick={() => openDay(cell)}
+                >
+                  {cell.date.getDate()}
+                  {#if cell.events.length || cell.birthdays.length}
+                    <span class="dots">
+                      {#if cell.birthdays.length}<span class="dot" style="background:var(--bday)"></span>{/if}
+                      {#each cell.events.slice(0, 3) as ev (ev.id + cell.key)}
+                        <span class="dot" style="background:{ev.colour}"></span>
+                      {/each}
+                    </span>
+                  {/if}
+                </button>
+              {:else}
+                <span></span>
+              {/if}
+            {/each}
+          </div>
+        </div>
+      {/each}
+    </div>
+  {:else}
+    <div class="daynames">
+      {#each DAY_NAMES as d (d)}<div class="dayname">{d}</div>{/each}
+    </div>
 
-  <div class="grid" bind:this={gridEl}>
-    {#each grid as cell (cell.key)}
-      <button
-        class="cell"
-        class:dim={!cell.inMonth}
-        class:today={cell.isToday}
-        onclick={() => openDay(cell)}
-      >
-        <div class="daynum">{cell.date.getDate()}</div>
-        {#each cell.birthdays.slice(0, 1) as b (b.id)}
-          <div class="pill bday">🎂 {b.name}</div>
+    {#if view === 'week'}
+      <div class="grid" bind:this={gridEl}>
+        {#each grid as cell (cell.key)}
+          <button class="cell wk" class:today={cell.isToday} onclick={() => openDay(cell)}>
+            <div class="cell-in">
+            <div class="daynum">{cell.date.getDate()} {cell.date.toLocaleDateString('en-GB', { month: 'short' })}</div>
+            {#each cell.birthdays as b (b.id)}
+              <div class="pill bday">🎂 {b.name}</div>
+            {/each}
+            {#each cell.events as ev (ev.id + cell.key)}
+              <div class="wk-ev" style="border-left-color:{ev.colour}">
+                <div class="wk-time">{ev.all_day ? 'All day' : timeOf(ev)}</div>
+                <div class="wk-title">{ev.recur_freq ? '↻ ' : ''}{ev.title}</div>
+                {#if ev.location}<div class="wk-loc">{ev.location}</div>{/if}
+              </div>
+            {/each}
+            </div>
+          </button>
         {/each}
-        {#each cell.events.slice(0, 3) as ev (ev.id + cell.key)}
-          <div class="pill" style="background:{ev.colour}">{ev.recur_freq ? '↻ ' : ''}{ev.title}</div>
+      </div>
+    {:else}
+      <div class="grid" bind:this={gridEl}>
+        {#each grid as cell (cell.key)}
+          <button
+            class="cell"
+            class:dim={!cell.inMonth}
+            class:today={cell.isToday}
+            onclick={() => openDay(cell)}
+          >
+            <div class="cell-in">
+            <div class="daynum">{cell.date.getDate()}</div>
+            {#each cell.birthdays.slice(0, 1) as b (b.id)}
+              <div class="pill bday">🎂 {b.name}</div>
+            {/each}
+            {#each cell.events.slice(0, 3) as ev (ev.id + cell.key)}
+              <div class="pill" style="background:{ev.colour}">{ev.recur_freq ? '↻ ' : ''}{ev.title}</div>
+            {/each}
+            {#if cell.events.length > 3}
+              <div class="more">+{cell.events.length - 3} more</div>
+            {/if}
+            </div>
+          </button>
         {/each}
-        {#if cell.events.length > 3}
-          <div class="more">+{cell.events.length - 3} more</div>
-        {/if}
-      </button>
-    {/each}
-  </div>
+      </div>
+    {/if}
+  {/if}
 </div>
 
 {#if selected}
@@ -392,9 +606,144 @@
   }
   .cal-head {
     display: grid;
-    grid-template-columns: auto 1fr auto auto;
+    grid-template-columns: auto 1fr auto auto auto auto auto;
     align-items: center;
     margin-bottom: 10px;
+  }
+  .views {
+    background: var(--bg);
+    border-radius: 999px;
+    padding: 3px;
+    margin-left: 10px;
+    white-space: nowrap;
+  }
+  .view {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    padding: 7px 14px;
+    border-radius: 999px;
+  }
+  .view.on {
+    background: var(--header);
+    color: #fff;
+  }
+  .today-btn,
+  .full-btn {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 12px;
+    margin-left: 8px;
+    border-radius: 999px;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .full-btn {
+    font-size: 16px;
+    padding: 6px 12px;
+  }
+
+  /* Chrome vertically centres whatever is inside a <button>, and Safari 10
+     cannot flex a button, so the cell content is pinned to the top-left
+     with an absolutely positioned inner box instead. */
+  .cell {
+    position: relative;
+  }
+  .cell-in {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    bottom: 3px;
+    left: 3px;
+    overflow: hidden;
+  }
+  /* Week view: one tall column per day, events listed with times. */
+  .cell.wk .cell-in {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .wk-ev {
+    background: #fff;
+    border-left: 4px solid;
+    border-radius: 4px;
+    padding: 3px 5px;
+    margin-bottom: 4px;
+  }
+  .wk-time {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+  .wk-title {
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.25;
+    word-wrap: break-word;
+  }
+  .wk-loc {
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  /* Year view: 4 x 3 mini-months. Row heights are set in JS (fitGrid). */
+  .year {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-gap: 10px;
+    grid-auto-rows: 180px;
+  }
+  .mini {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 6px;
+    overflow: hidden;
+  }
+  .mini-title {
+    display: block;
+    width: 100%;
+    height: 18px;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+  }
+  .mini-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+  }
+  .mini-dn {
+    height: 13px;
+    font-size: 9px;
+    font-weight: 600;
+    text-align: center;
+    color: var(--text-muted);
+  }
+  .mini-day {
+    position: relative;
+    font-size: 11px;
+    text-align: center;
+    border-radius: 4px;
+    border: 1px solid transparent;
+  }
+  .mini-day.busy {
+    font-weight: 700;
+  }
+  .mini-day.today {
+    border-color: var(--today-ring);
+  }
+  .dots {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 1px;
+    line-height: 0;
+    text-align: center;
+  }
+  .dot {
+    display: inline-block;
+    width: 4px;
+    height: 4px;
+    margin: 0 1px;
+    border-radius: 50%;
   }
   .add {
     background: var(--header);
@@ -510,6 +859,17 @@
     .add {
       padding: 8px 14px;
       font-size: 13px;
+    }
+    .view {
+      padding: 5px 11px;
+      font-size: 12px;
+    }
+    .today-btn {
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+    .full-btn {
+      padding: 4px 10px;
     }
     .dayname {
       padding: 2px 0;

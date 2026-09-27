@@ -1,4 +1,17 @@
-:80 {
+{
+	# The Android tablet will only install the dashboard as an app over
+	# HTTPS. This box is LAN-only, so Caddy signs its own certificate from a
+	# local CA (kept in the caddy_data volume so it survives rebuilds).
+	# Plain http:// on :80 stays exactly as it was — the iPad keeps using it,
+	# so there is NO http->https redirect.
+	auto_https disable_redirects
+	skip_install_trust
+	# Chrome sends no SNI when you browse to a bare IP, so tell Caddy which
+	# certificate to present.
+	default_sni 192.168.10.6
+}
+
+(site) {
 	# API and calendar feed proxy to the api container
 	handle /api/* {
 		reverse_proxy api:3000
@@ -9,6 +22,16 @@
 	handle /assets/* {
 		root * /srv
 		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	# Local CA root, for installing on the tablet once so it trusts the
+	# HTTPS certificate (Settings -> Security -> Install a certificate -> CA).
+	handle /ca.crt {
+		root * /data/caddy/pki/authorities/local
+		rewrite * /root.crt
+		header Content-Type application/x-x509-ca-cert
+		header Content-Disposition "attachment; filename=peeters-ca.crt"
 		file_server
 	}
 
@@ -25,4 +48,13 @@
 	}
 
 	encode gzip
+}
+
+:80 {
+	import site
+}
+
+https://192.168.10.6 {
+	tls internal
+	import site
 }

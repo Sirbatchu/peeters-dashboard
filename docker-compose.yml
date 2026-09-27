@@ -49,6 +49,8 @@ services:
       PARENT_PIN: ${PARENT_PIN:-1234}
     volumes:
       - ./photos:/photos:ro
+      # Background photos uploaded from phones via http://192.168.10.6/photos
+      - backgrounds:/backgrounds
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     depends_on:
@@ -60,9 +62,15 @@ services:
     restart: unless-stopped
     ports:
       - '80:80'
+      # HTTPS for the Android tablet's app install (local CA, see Caddyfile)
+      - '443:443'
+    volumes:
+      - caddy_data:/data
     depends_on:
       - api
 
 volumes:
   db_data:
   ha_config:
+  caddy_data:
+  backgrounds:
