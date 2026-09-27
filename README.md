@@ -6,7 +6,7 @@ Wall dashboard for the kitchen iPad, served from the Mac Mini at `192.168.10.6`.
 
 | What | Where |
 | --- | --- |
-| Dashboard | http://192.168.10.6 (iPad) · https://192.168.10.6 (Android tablet) |
+| Dashboard | http://192.168.10.6 (iPad) · https://192.168.10.6:8443 (Android tablet) |
 | Home Assistant | http://192.168.10.6:8123 |
 | Calendar feed (subscribe from a phone) | http://192.168.10.6/api/calendar.ics |
 
@@ -18,13 +18,14 @@ Safari; Chrome on iOS cannot install home-screen apps.
 Chrome only offers **Install** (a real fullscreen app) on HTTPS — on plain
 `http://192.168.10.6` it says *"This app cannot be installed"* and only offers a
 shortcut that opens in a browser tab. So Caddy also serves the dashboard on
-**https://192.168.10.6**, signed by its own local CA. One-time setup on the tablet:
+**https://192.168.10.6:8443**, signed by its own local CA (port 8443 because another
+container on the Mini already uses 443). One-time setup on the tablet:
 
 1. In Chrome open **http://192.168.10.6/ca.crt** — it downloads `peeters-ca.crt`.
 2. Settings → Security & privacy → More security settings → Encryption & credentials →
    **Install a certificate → CA certificate** → pick `peeters-ca.crt` from Downloads.
    (Menu names vary a little by Android version; search Settings for "CA certificate".)
-3. Fully close Chrome, then open **https://192.168.10.6** — there should be no warning.
+3. Fully close Chrome, then open **https://192.168.10.6:8443** — there should be no warning.
 4. ⋮ menu → **Add to home screen → Install**. It launches fullscreen, landscape, and
    keeps the screen awake (Wake Lock).
 
@@ -55,7 +56,7 @@ Four containers, compose project `peeters`, living in `~/peeters-dashboard` on t
 
 | Service | Role |
 | --- | --- |
-| `web` | Caddy serving the built Svelte SPA on :80 and :443, proxying `/api` to the API |
+| `web` | Caddy serving the built Svelte SPA on :80 and :8443, proxying `/api` to the API |
 | `api` | Fastify — calendar, kids, household, Home Assistant bridge |
 | `db` | Postgres 16 — the source of truth for everything |
 | `homeassistant` | Device layer on :8123 (host networking, needed for Sonos/Blink discovery) |
