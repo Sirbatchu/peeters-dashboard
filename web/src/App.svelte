@@ -7,6 +7,7 @@
   import House from './lib/House.svelte';
   import Music from './lib/Music.svelte';
   import PhotoFrame from './lib/PhotoFrame.svelte';
+  import Backdrop from './lib/Backdrop.svelte';
   import { api } from './api.js';
 
   let tab = $state('calendar');
@@ -14,7 +15,14 @@
   let online = $state(true);
   let settings = $state({});
   let now = $state(new Date());
-  let calFull = $state(false); // calendar full-screen: header and tabs hidden
+  // Full screen: header and tabs give way to a slim bar that flips between
+  // the calendar and the kids' board. Entered from the calendar's ⛶ button.
+  let full = $state(false);
+  const FULL_TABS = ['calendar', 'kids'];
+  let isFull = $derived(full && FULL_TABS.indexOf(tab) !== -1);
+  let clockStr = $derived(
+    String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0')
+  );
 
   const TABS = [
     { id: 'calendar', label: 'Calendar', icon: '📅' },
@@ -77,7 +85,8 @@
     loadSettings();
     const iv = setInterval(heartbeat, 30000);
     const clock = setInterval(() => (now = new Date()), 1000);
-    const st = setInterval(loadSettings, 5 * 60 * 1000);
+    // Every minute so a background picked on a phone shows up quickly.
+    const st = setInterval(loadSettings, 60 * 1000);
 
     // Keep the wall tablet's screen on. Wake Lock is Android Chrome over
     // HTTPS only (the iPad uses Auto-Lock: Never instead), and the browser
@@ -115,8 +124,9 @@
 </script>
 
 <Sky {weatherCode} />
+<Backdrop {settings} />
 
-<div class="shell" class:dimmed={bedtime} class:calfull={calFull && tab === 'calendar'}>
+<div class="shell" class:dimmed={bedtime} class:calfull={isFull}>
   <!-- Hidden rather than unmounted in full-screen so weather keeps updating. -->
   <div class="chrome">
     <Header bind:weatherCode />
@@ -142,6 +152,20 @@
     </div>
   {/if}
 
+  {#if isFull}
+    <div class="fullbar">
+      <div class="fb-clock">{clockStr}</div>
+      <div class="fb-tabs">
+        {#each TABS.filter((t) => FULL_TABS.indexOf(t.id) !== -1) as t (t.id)}
+          <button class="fb-tab" class:active={tab === t.id} onclick={() => (tab = t.id)}>
+            <span class="tab-icon">{t.icon}</span>{t.label}
+          </button>
+        {/each}
+      </div>
+      <button class="fb-exit" onclick={() => (full = false)}>✕ Exit full screen</button>
+    </div>
+  {/if}
+
   <nav class="tabs chrome">
     {#each TABS as t (t.id)}
       <button class="tab" class:active={tab === t.id} onclick={() => (tab = t.id)}>
@@ -153,7 +177,7 @@
 
   <main>
     {#if tab === 'calendar'}
-      <Calendar bind:full={calFull} />
+      <Calendar bind:full />
     {:else if tab === 'kids'}
       <Kids />
     {:else if tab === 'food'}
@@ -196,6 +220,47 @@
   .calfull main {
     max-width: none;
     padding: 8px;
+  }
+  .fullbar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 8px 12px 0;
+  }
+  .fb-clock {
+    color: #fff;
+    font-size: 22px;
+    font-weight: 700;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  }
+  .fb-tabs {
+    background: rgba(255, 255, 255, 0.35);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    border-radius: 999px;
+    padding: 3px;
+    white-space: nowrap;
+  }
+  .fb-tab {
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    padding: 7px 22px;
+    border-radius: 999px;
+  }
+  .fb-tab.active {
+    background: rgba(15, 23, 42, 0.82);
+    text-shadow: none;
+  }
+  .fb-exit {
+    justify-self: end;
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    background: rgba(15, 23, 42, 0.55);
+    padding: 7px 14px;
+    border-radius: 999px;
   }
   .tabs {
     display: grid;

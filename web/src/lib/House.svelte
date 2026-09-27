@@ -1,5 +1,15 @@
 <script>
   import { api } from '../api.js';
+  import qrcode from 'qrcode-generator';
+
+  // Phones open the uploader over plain http (no CA needed on each phone).
+  const photosUrl = 'http://' + location.hostname + '/photos';
+  const qr = (() => {
+    var c = qrcode(0, 'M');
+    c.addData(photosUrl);
+    c.make();
+    return c.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+  })();
 
   let status = $state(null);
   let phones = $state([]);
@@ -74,6 +84,19 @@
 
 {#if error}<div class="error">{error}</div>{/if}
 
+<div class="card panel bgcard">
+  <div class="qr">{@html qr}</div>
+  <div>
+    <div class="panel-title">🖼 Background photos</div>
+    <p class="hint">
+      Point your phone's camera at the code (on the home Wi-Fi) to add photos and pick the
+      background — one photo, a slideshow, or the animated sky. Or open
+      <strong>{photosUrl}</strong>.
+    </p>
+    <a class="bg-open" href="/photos">Manage on this screen</a>
+  </div>
+</div>
+
 {#if !status}
   <div class="card note">Checking the house…</div>
 {:else if !status.configured || !status.ok}
@@ -142,6 +165,35 @@
 {/if}
 
 <style>
+  .bgcard {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-gap: 16px;
+    align-items: center;
+  }
+  .qr {
+    width: 120px;
+    height: 120px;
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .qr :global(svg) {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .bg-open {
+    display: inline-block;
+    margin-top: 8px;
+    background: var(--header);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 999px;
+    text-decoration: none;
+  }
   .panel {
     padding: 16px;
     margin-bottom: 16px;

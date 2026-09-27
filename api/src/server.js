@@ -5,6 +5,7 @@ import kids from './routes/kids.js';
 import home from './routes/home.js';
 import household from './routes/household.js';
 import misc from './routes/misc.js';
+import backgrounds from './routes/backgrounds.js';
 
 const app = Fastify({
   logger: { level: process.env.LOG_LEVEL || 'info' }
@@ -15,6 +16,7 @@ app.register(events, { prefix: '/api' });
 app.register(kids, { prefix: '/api' });
 app.register(home, { prefix: '/api' });
 app.register(household, { prefix: '/api' });
+app.register(backgrounds, { prefix: '/api' });
 
 app.setErrorHandler((err, req, reply) => {
   req.log.error(err);

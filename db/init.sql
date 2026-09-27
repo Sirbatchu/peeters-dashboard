@@ -165,4 +165,7 @@ INSERT INTO settings (key, value) VALUES
   ('morning_leave',  '08:30'),   -- ...counting down to here
   ('school_days',    '12345'),   -- ISO weekday numbers, Mon=1
   ('bedtime_start',  '19:00'),   -- dashboard dims from here
-  ('bedtime_end',    '06:30');
+  ('bedtime_end',    '06:30'),
+  ('background_mode',  'sky'),  -- sky | photo | slideshow
+  ('background_photo', ''),     -- file name when mode = photo
+  ('background_mins',  '15');   -- slideshow interval

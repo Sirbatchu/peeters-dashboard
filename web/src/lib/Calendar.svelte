@@ -370,9 +370,9 @@
       {/each}
     </div>
     <button class="today-btn" onclick={goToday}>Today</button>
-    <button class="full-btn" onclick={() => (full = !full)} title={full ? 'Exit full screen' : 'Full screen'}>
-      {full ? '✕' : '⛶'}
-    </button>
+    {#if !full}
+      <button class="full-btn" onclick={() => (full = true)} title="Full screen">⛶</button>
+    {/if}
     <button class="add" onclick={() => openForm()}>＋ Add event</button>
   </div>
 

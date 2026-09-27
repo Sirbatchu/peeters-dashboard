@@ -77,8 +77,20 @@ The iPad is a 4th gen, capped at **iOS 10.3 / Safari 10**. This shapes the front
 ## Calendar views
 
 The calendar has **Week / Month / Year** views (remembered per device) and a **⛶**
-button that hides the header and tabs so the calendar fills the screen; **✕** brings
-them back. Tap a month name in Year view to open it, or any day for its events.
+button for full screen: the header and tabs give way to a slim bar with the clock, a
+**Calendar / Kids** switch, and **✕ Exit full screen**. Tap a month name in Year view
+to open it, or any day for its events.
+
+## Background photos
+
+From any phone on the home Wi-Fi, open **http://192.168.10.6/photos** — or scan the QR
+code on the **House** tab. Tap **Add photos**, pick from the camera roll, then choose
+**Animated sky**, **One photo** (tap the one you want) or **Slideshow**. The dashboard
+picks the change up within a minute. Tip: Share → Add to Home Screen on that page for
+a one-tap icon.
+
+Photos are resized on the phone before upload and kept in the `backgrounds` docker
+volume (separate from the idle-slideshow `photos/` folder).
 
 ## Settings
 
@@ -95,6 +107,8 @@ curl -X PUT http://192.168.10.6/api/settings \
 | `morning_start` / `morning_leave` | 07:00 / 08:30 | School-run countdown window |
 | `school_days` | `12345` | ISO weekdays the countdown runs (Mon=1) |
 | `bedtime_start` / `bedtime_end` | 19:00 / 06:30 | When the display dims |
+| `background_mode` | `sky` | `sky`, `photo` or `slideshow` (set from `/photos`) |
+| `background_photo` / `background_mins` | — / 15 | Chosen photo; slideshow interval |
 
 `PARENT_PIN` (in `.env`, default `1234`) gates reward claims.
 

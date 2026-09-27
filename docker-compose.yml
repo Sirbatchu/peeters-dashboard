@@ -49,6 +49,8 @@ services:
       PARENT_PIN: ${PARENT_PIN:-1234}
     volumes:
       - ./photos:/photos:ro
+      # Background photos uploaded from phones via http://192.168.10.6/photos
+      - backgrounds:/backgrounds
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     depends_on:
@@ -71,3 +73,4 @@ volumes:
   db_data:
   ha_config:
   caddy_data:
+  backgrounds:
