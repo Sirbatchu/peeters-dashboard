@@ -14,6 +14,7 @@
   let online = $state(true);
   let settings = $state({});
   let now = $state(new Date());
+  let calFull = $state(false); // calendar full-screen: header and tabs hidden
 
   const TABS = [
     { id: 'calendar', label: 'Calendar', icon: '📅' },
@@ -115,8 +116,11 @@
 
 <Sky {weatherCode} />
 
-<div class="shell" class:dimmed={bedtime}>
-  <Header bind:weatherCode />
+<div class="shell" class:dimmed={bedtime} class:calfull={calFull && tab === 'calendar'}>
+  <!-- Hidden rather than unmounted in full-screen so weather keeps updating. -->
+  <div class="chrome">
+    <Header bind:weatherCode />
+  </div>
 
   {#if !online}
     <div class="offline">Reconnecting to the house server…</div>
@@ -138,7 +142,7 @@
     </div>
   {/if}
 
-  <nav class="tabs">
+  <nav class="tabs chrome">
     {#each TABS as t (t.id)}
       <button class="tab" class:active={tab === t.id} onclick={() => (tab = t.id)}>
         <span class="tab-icon">{t.icon}</span>
@@ -149,7 +153,7 @@
 
   <main>
     {#if tab === 'calendar'}
-      <Calendar />
+      <Calendar bind:full={calFull} />
     {:else if tab === 'kids'}
       <Kids />
     {:else if tab === 'food'}
@@ -185,6 +189,13 @@
     max-width: 1100px;
     width: 100%;
     margin: 0 auto;
+  }
+  .calfull .chrome {
+    display: none;
+  }
+  .calfull main {
+    max-width: none;
+    padding: 8px;
   }
   .tabs {
     display: grid;

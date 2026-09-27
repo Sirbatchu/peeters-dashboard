@@ -74,6 +74,12 @@ The iPad is a 4th gen, capped at **iOS 10.3 / Safari 10**. This shapes the front
 - Layout is landscape-first: a `max-height: 850px` media query compacts the header,
   tabs and calendar grid so all six weeks fit on a 1024×748 screen.
 
+## Calendar views
+
+The calendar has **Week / Month / Year** views (remembered per device) and a **⛶**
+button that hides the header and tabs so the calendar fills the screen; **✕** brings
+them back. Tap a month name in Year view to open it, or any day for its events.
+
 ## Settings
 
 Times and toggles live in the `settings` table, editable over the API:
