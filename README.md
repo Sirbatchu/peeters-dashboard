@@ -82,6 +82,12 @@ button for full screen: the header and tabs give way to a slim bar with the cloc
 **Calendar / Kids** switch, and **✕ Exit full screen**. Tap a month name in Year view
 to open it, or any day for its events.
 
+## Dimming
+
+There is no automatic bedtime dim. Tap **🌙** (end of the tab row, or **🌙 Dim** in the
+full-screen bar) to dim the screen, and **☀️** to brighten it again. Each screen
+remembers its own setting.
+
 ## Background photos
 
 From any phone on the home Wi-Fi, open **http://192.168.10.6/photos** — or scan the QR
@@ -100,14 +106,13 @@ Times and toggles live in the `settings` table, editable over the API:
 ```bash
 curl -X PUT http://192.168.10.6/api/settings \
   -H "Content-Type: application/json" \
-  -d '{"bedtime_start":"20:30"}'
+  -d '{"morning_leave":"08:40"}'
 ```
 
 | Key | Default | Effect |
 | --- | --- | --- |
 | `morning_start` / `morning_leave` | 07:00 / 08:30 | School-run countdown window |
 | `school_days` | `12345` | ISO weekdays the countdown runs (Mon=1) |
-| `bedtime_start` / `bedtime_end` | 19:00 / 06:30 | When the display dims |
 | `background_mode` | `sky` | `sky`, `photo` or `slideshow` (set from `/photos`) |
 | `background_photo` / `background_mins` | — / 15 | Chosen photo; slideshow interval |
 

@@ -72,13 +72,26 @@
     };
   });
 
-  // Bedtime mode: dim everything between bedtime_start and bedtime_end
-  let bedtime = $derived.by(() => {
-    const nowMins = now.getHours() * 60 + now.getMinutes();
-    const start = minsOf(settings.bedtime_start, '19:00');
-    const end = minsOf(settings.bedtime_end, '06:30');
-    return start > end ? nowMins >= start || nowMins < end : nowMins >= start && nowMins < end;
-  });
+  // Dim mode: toggled by hand with the 🌙 button (no automatic schedule).
+  // Remembered per screen, so dimming the tablet doesn't dim the iPad.
+  let dimmed = $state(savedDim());
+
+  function savedDim() {
+    try {
+      return localStorage.getItem('dimmed') === '1';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function toggleDim() {
+    dimmed = !dimmed;
+    try {
+      localStorage.setItem('dimmed', dimmed ? '1' : '0');
+    } catch (e) {
+      /* private mode etc. */
+    }
+  }
 
   $effect(() => {
     heartbeat();
@@ -126,7 +139,7 @@
 <Sky {weatherCode} />
 <Backdrop {settings} />
 
-<div class="shell" class:dimmed={bedtime} class:calfull={isFull}>
+<div class="shell" class:dimmed class:calfull={isFull}>
   <!-- Hidden rather than unmounted in full-screen so weather keeps updating. -->
   <div class="chrome">
     <Header bind:weatherCode />
@@ -136,9 +149,6 @@
     <div class="offline">Reconnecting to the house server…</div>
   {/if}
 
-  {#if bedtime}
-    <div class="bedtime-chip">🌙 Bedtime mode — back to full brightness at {settings.bedtime_end || '06:30'}</div>
-  {/if}
 
   {#if countdown}
     <div class="countdown" class:urgent={countdown.urgent} class:critical={countdown.critical}>
@@ -162,7 +172,10 @@
           </button>
         {/each}
       </div>
-      <button class="fb-exit" onclick={() => (full = false)}>✕ Exit full screen</button>
+      <div class="fb-right">
+        <button class="fb-exit" class:on={dimmed} onclick={toggleDim}>{dimmed ? '☀️ Brighten' : '🌙 Dim'}</button>
+        <button class="fb-exit" onclick={() => (full = false)}>✕ Exit full screen</button>
+      </div>
     </div>
   {/if}
 
@@ -173,6 +186,9 @@
         <span>{t.label}</span>
       </button>
     {/each}
+    <button class="tab dim-btn" class:active={dimmed} onclick={toggleDim} title={dimmed ? 'Brighten' : 'Dim'}>
+      {dimmed ? '☀️' : '🌙'}
+    </button>
   </nav>
 
   <main>
@@ -190,7 +206,7 @@
   </main>
 </div>
 
-{#if bedtime}
+{#if dimmed}
   <div class="night-veil"></div>
 {/if}
 
@@ -264,7 +280,7 @@
   }
   .tabs {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(5, 1fr) auto;
     grid-gap: 10px;
     padding: 12px 16px 0;
     max-width: 1100px;
@@ -328,10 +344,8 @@
     .cd-icon {
       font-size: 20px;
     }
-    .bedtime-chip {
-      margin-top: 6px;
-      padding: 5px 14px;
-      font-size: 12px;
+    .dim-btn {
+      padding: 8px 12px;
     }
   }
 
@@ -393,26 +407,27 @@
     background: #dc2626;
   }
 
-  /* Bedtime mode */
+  .dim-btn {
+    padding: 14px 16px;
+    font-size: 18px;
+  }
+  .fb-right {
+    justify-self: end;
+    white-space: nowrap;
+  }
+  .fb-right .fb-exit {
+    margin-left: 6px;
+  }
+  .fb-exit.on {
+    background: rgba(245, 158, 11, 0.85);
+  }
+
+  /* Dim mode */
   .shell.dimmed {
     -webkit-filter: brightness(0.68) saturate(0.75);
     filter: brightness(0.68) saturate(0.75);
     -webkit-transition: -webkit-filter 2s ease;
     transition: filter 2s ease;
-  }
-  .bedtime-chip {
-    max-width: 1100px;
-    width: calc(100% - 32px);
-    margin: 10px auto 0;
-    padding: 8px 16px;
-    border-radius: 999px;
-    background: rgba(15, 23, 42, 0.6);
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
-    color: #cbd5e1;
-    font-size: 13px;
-    font-weight: 500;
-    text-align: center;
   }
   .night-veil {
     position: fixed;
