@@ -60,9 +60,14 @@ services:
     restart: unless-stopped
     ports:
       - '80:80'
+      # HTTPS for the Android tablet's app install (local CA, see Caddyfile)
+      - '443:443'
+    volumes:
+      - caddy_data:/data
     depends_on:
       - api
 
 volumes:
   db_data:
   ha_config:
+  caddy_data:

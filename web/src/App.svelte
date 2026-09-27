@@ -78,11 +78,28 @@
     const clock = setInterval(() => (now = new Date()), 1000);
     const st = setInterval(loadSettings, 5 * 60 * 1000);
 
+    // Keep the wall tablet's screen on. Wake Lock is Android Chrome over
+    // HTTPS only (the iPad uses Auto-Lock: Never instead), and the browser
+    // drops the lock whenever the page is hidden, so re-take it on wake.
+    let wakeLock = null;
+    const keepAwake = () => {
+      if (!navigator.wakeLock || wakeLock) return;
+      navigator.wakeLock
+        .request('screen')
+        .then((l) => {
+          wakeLock = l;
+          l.addEventListener('release', () => (wakeLock = null));
+        })
+        .catch(() => {});
+    };
+    keepAwake();
+
     // iOS kills backgrounded standalone apps; refresh state on wake.
     const onVis = () => {
       if (!document.hidden) {
         heartbeat();
         loadSettings();
+        keepAwake();
       }
     };
     document.addEventListener('visibilitychange', onVis);
@@ -91,6 +108,7 @@
       clearInterval(clock);
       clearInterval(st);
       document.removeEventListener('visibilitychange', onVis);
+      if (wakeLock) wakeLock.release();
     };
   });
 </script>
