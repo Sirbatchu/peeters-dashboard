@@ -62,8 +62,9 @@ services:
     restart: unless-stopped
     ports:
       - '80:80'
-      # HTTPS for the Android tablet's app install (local CA, see Caddyfile)
-      - '443:443'
+      # HTTPS for the Android tablet's app install (local CA, see Caddyfile).
+      # Host port 8443 because another container on the Mini already owns 443.
+      - '8443:443'
     volumes:
       - caddy_data:/data
     depends_on:

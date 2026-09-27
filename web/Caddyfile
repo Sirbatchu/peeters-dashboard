@@ -10,6 +10,8 @@
 	# certificate to present.
 	default_sni 192.168.10.6
 }
+# Published on the Mini as https://192.168.10.6:8443 (compose maps 8443->443).
+# The host matcher ignores the port, so the site address stays as below.
 
 (site) {
 	# API and calendar feed proxy to the api container
