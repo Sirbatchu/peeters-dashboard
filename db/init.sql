@@ -66,8 +66,8 @@ CREATE TABLE kids (
 );
 
 INSERT INTO kids (slug, name, colour, emoji, sort_order) VALUES
-  ('malachi', 'Malachi', '#3b82f6', '🦖', 1),
-  ('atticus', 'Atticus', '#10b981', '🚀', 2),
+  ('malachi', 'Malachi', '#3b82f6', '🚀', 1),
+  ('atticus', 'Atticus', '#10b981', '🦖', 2),
   ('waverly', 'Waverly', '#f9a8d4', '🦄', 3);
 
 -- Editable from the UI, so the list changes without a deploy.

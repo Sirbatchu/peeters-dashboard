@@ -162,7 +162,10 @@ export async function composeBriefing() {
   if (meal.rows.length) out.push(`Tonight's dinner is ${meal.rows[0].title}.`);
 
   for (const n of notes.rows) {
-    out.push(n.label ? `A note from ${firstName(n.label)}: ${n.body}` : `A note: ${n.body}`);
+    // Notes are typed casually; without a full stop Alexa runs straight on
+    // into the next sentence with no pause.
+    const body = /[.!?]$/.test(n.body.trim()) ? n.body.trim() : `${n.body.trim()}.`;
+    out.push(n.label ? `A note from ${firstName(n.label)}: ${body}` : `A note: ${body}`);
   }
 
   const { iso } = nowLocal();

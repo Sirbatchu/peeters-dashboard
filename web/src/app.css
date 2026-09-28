@@ -121,3 +121,16 @@ button {
     transform: scale(1.06);
   }
 }
+
+/* Wall display: no scrollbars anywhere. Everything still scrolls by touch,
+   swipe or mouse wheel (and the Next-up strip has its own ‹ › arrows); the
+   bars themselves are just clutter on a kiosk screen. */
+* {
+  scrollbar-width: none; /* Firefox */
+}
+*::-webkit-scrollbar {
+  /* Chrome, Android, Safari (incl. the iPad's Safari 10) */
+  display: none;
+  width: 0;
+  height: 0;
+}
