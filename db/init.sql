@@ -21,8 +21,7 @@ INSERT INTO calendars (slug, label, colour, sort_order) VALUES
   ('jamie-lee', 'Jamie-Lee',       '#7dd3fc', 2),
   ('malachi',   'Malachi',         '#3b82f6', 3),
   ('atticus',   'Atticus',         '#10b981', 4),
-  ('waverly',   'Waverly',         '#f9a8d4', 5),
-  ('forest',    'Forest',          '#f97316', 9);
+  ('waverly',   'Waverly',         '#f9a8d4', 5);
 
 CREATE TABLE events (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),

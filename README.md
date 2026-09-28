@@ -95,7 +95,6 @@ colour everywhere in the calendar. Pick it from the colour chips in the event fo
 | Malachi | blue `#3b82f6` |
 | Atticus | green `#10b981` |
 | Waverly | light pink `#f9a8d4` |
-| Forest | orange `#f97316` |
 
 Text on an event pill is black or white depending on the colour's perceived
 brightness, so the pale pink and baby blue stay readable. Add or recolour people
