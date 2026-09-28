@@ -160,7 +160,9 @@
 <style>
   .cols {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    /* minmax(0, …) lets the columns shrink below their content's width,
+       so nothing inside can push past the card edge. */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-gap: 16px;
   }
   @media (max-width: 700px) {
@@ -178,11 +180,16 @@
   }
   .add-row {
     display: grid;
-    grid-template-columns: 1fr auto;
+    /* The input shrinks to fit; the Add button always keeps its full width
+       (Android Chrome gives inputs a wide built-in minimum, which pushed
+       the button off the card on the TCL tablet). */
+    grid-template-columns: minmax(0, 1fr) auto;
     grid-gap: 8px;
     margin-bottom: 12px;
   }
   .add-row input {
+    width: 100%;
+    min-width: 0;
     padding: 12px;
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -194,6 +201,7 @@
   .add-btn {
     background: var(--header);
     color: #fff;
+    white-space: nowrap;
     padding: 12px 20px;
     border-radius: 10px;
     font-weight: 600;
