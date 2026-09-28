@@ -28,7 +28,12 @@ function expand(ev, start, end, cap = 500) {
         ...ev,
         starts_at: cur.toISOString(),
         ends_at: new Date(cur.getTime() + duration).toISOString(),
-        occurrence_date: cur.toISOString().slice(0, 10)
+        occurrence_date: cur.toISOString().slice(0, 10),
+        // The series' own first start/end. Editing an occurrence edits the
+        // whole series, so the form must load these rather than the
+        // occurrence's shifted dates - otherwise saving slides the series.
+        series_starts_at: ev.starts_at,
+        series_ends_at: ev.ends_at
       });
     }
     // Month/year stepping uses calendar math so "the 15th" stays the 15th.
@@ -46,7 +51,7 @@ function expand(ev, start, end, cap = 500) {
 
 export default async function routes(app) {
   app.get('/calendars', async () => {
-    const { rows } = await q('SELECT slug, label, colour FROM calendars ORDER BY slug');
+    const { rows } = await q('SELECT slug, label, colour FROM calendars ORDER BY sort_order, label');
     return rows;
   });
 

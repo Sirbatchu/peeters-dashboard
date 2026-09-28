@@ -9,13 +9,20 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE TABLE calendars (
   slug        TEXT PRIMARY KEY,
   label       TEXT NOT NULL,
-  colour      TEXT NOT NULL
+  colour      TEXT NOT NULL,
+  sort_order  INT  NOT NULL DEFAULT 50
 );
 
-INSERT INTO calendars (slug, label, colour) VALUES
-  ('matt',   'Matt',   '#3b82f6'),
-  ('family', 'Family', '#10b981'),
-  ('forest', 'Forest', '#f97316');
+-- One row per person the dashboard colour-codes by, plus the shared buckets.
+-- Family is deliberately neutral slate; the greens/blues belong to people.
+INSERT INTO calendars (slug, label, colour, sort_order) VALUES
+  ('family',    'Family',          '#64748b', 0),
+  ('matt',      'Matthew Peeters', '#8b5cf6', 1),
+  ('jamie-lee', 'Jamie-Lee',       '#7dd3fc', 2),
+  ('malachi',   'Malachi',         '#3b82f6', 3),
+  ('atticus',   'Atticus',         '#10b981', 4),
+  ('waverly',   'Waverly',         '#f9a8d4', 5),
+  ('forest',    'Forest',          '#f97316', 9);
 
 CREATE TABLE events (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
