@@ -4,6 +4,7 @@
   // in the Alexa morning briefing.
   import { api } from '../api.js';
   import { textOn, tint } from './colour.js';
+  import Birthdays from './Birthdays.svelte';
 
   let notes = $state([]);
   let people = $state([]);
@@ -143,6 +144,8 @@
   <div class="card empty">No notes yet. Leave the first one above.</div>
 {/if}
 
+<div class="bdays"><Birthdays /></div>
+
 <style>
   .composer {
     padding: 14px;
@@ -275,6 +278,9 @@
   }
   .icon.on {
     opacity: 1;
+  }
+  .bdays {
+    margin-top: 16px;
   }
   .empty {
     padding: 24px;
