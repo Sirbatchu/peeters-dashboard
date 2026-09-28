@@ -8,6 +8,8 @@
   import Music from './lib/Music.svelte';
   import PhotoFrame from './lib/PhotoFrame.svelte';
   import Backdrop from './lib/Backdrop.svelte';
+  import NextUp from './lib/NextUp.svelte';
+  import Notes from './lib/Notes.svelte';
   import { api } from './api.js';
 
   let tab = $state('calendar');
@@ -28,6 +30,7 @@
     { id: 'calendar', label: 'Calendar', icon: '📅' },
     { id: 'kids', label: 'Kids', icon: '⭐' },
     { id: 'food', label: 'Food', icon: '🛒' },
+    { id: 'notes', label: 'Notes', icon: '📝' },
     { id: 'house', label: 'House', icon: '🏠' },
     { id: 'music', label: 'Music', icon: '🎵' }
   ];
@@ -44,9 +47,45 @@
   async function loadSettings() {
     try {
       settings = await api.get('/settings');
+      applyRemoteDim(settings);
     } catch (e) {
       /* defaults below cover it */
     }
+  }
+
+  // "Alexa, bedtime" and the morning briefing dim/brighten every screen by
+  // writing settings.dim_command = {state, at}. Each screen acts on a command
+  // once; a manual 🌙/☀️ tap afterwards still wins until the next command.
+  let lastDimCmd = storedDimCmd();
+
+  function storedDimCmd() {
+    try {
+      return Number(localStorage.getItem('dimCmdAt')) || 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function applyRemoteDim(s) {
+    if (!s || !s.dim_command) return;
+    var cmd;
+    try {
+      cmd = JSON.parse(s.dim_command);
+    } catch (e) {
+      return;
+    }
+    if (!cmd || !cmd.at || cmd.at <= lastDimCmd) return;
+    var firstEver = !lastDimCmd;
+    lastDimCmd = cmd.at;
+    try {
+      localStorage.setItem('dimCmdAt', String(cmd.at));
+    } catch (e) {
+      /* private mode: the in-memory copy still stops repeats */
+    }
+    // A screen seeing its first ever command shouldn't act on a stale one,
+    // e.g. a tablet switched on in the afternoon after last night's bedtime.
+    if (firstEver && Date.now() - cmd.at > 10 * 60 * 1000) return;
+    setDim(cmd.state === 1);
   }
 
   function minsOf(hhmm, fallback) {
@@ -84,8 +123,8 @@
     }
   }
 
-  function toggleDim() {
-    dimmed = !dimmed;
+  function setDim(v) {
+    dimmed = v;
     try {
       localStorage.setItem('dimmed', dimmed ? '1' : '0');
     } catch (e) {
@@ -93,13 +132,18 @@
     }
   }
 
+  function toggleDim() {
+    setDim(!dimmed);
+  }
+
   $effect(() => {
     heartbeat();
     loadSettings();
     const iv = setInterval(heartbeat, 30000);
     const clock = setInterval(() => (now = new Date()), 1000);
-    // Every minute so a background picked on a phone shows up quickly.
-    const st = setInterval(loadSettings, 60 * 1000);
+    // Every 20s so "Alexa, bedtime" dims the screens promptly (and a
+    // background picked on a phone shows up quickly). It's one tiny request.
+    const st = setInterval(loadSettings, 20 * 1000);
 
     // Keep the wall tablet's screen on. Wake Lock is Android Chrome over
     // HTTPS only (the iPad uses Auto-Lock: Never instead), and the browser
@@ -143,6 +187,7 @@
   <!-- Hidden rather than unmounted in full-screen so weather keeps updating. -->
   <div class="chrome">
     <Header bind:weatherCode />
+    <NextUp />
   </div>
 
   {#if !online}
@@ -198,6 +243,8 @@
       <Kids />
     {:else if tab === 'food'}
       <Food />
+    {:else if tab === 'notes'}
+      <Notes />
     {:else if tab === 'house'}
       <House />
     {:else if tab === 'music'}
@@ -280,7 +327,7 @@
   }
   .tabs {
     display: grid;
-    grid-template-columns: repeat(5, 1fr) auto;
+    grid-template-columns: repeat(6, 1fr) auto;
     grid-gap: 10px;
     padding: 12px 16px 0;
     max-width: 1100px;

@@ -177,7 +177,7 @@
 
 {#if error}<div class="error">{error}</div>{/if}
 
-<div class="board">
+<div class="board" class:three={kids.length >= 3}>
   {#each kids as kid (kid.slug)}
     <div class="card kid" style="border-top: 6px solid {kid.colour}">
       <div class="kid-head">
@@ -343,8 +343,17 @@
     grid-template-columns: 1fr 1fr;
     grid-gap: 16px;
   }
+  /* Three kids side by side on the wall screen; wraps to one column on phones. */
+  .board.three {
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-gap: 12px;
+  }
+  .board.three .kid {
+    padding: 12px;
+  }
   @media (max-width: 640px) {
-    .board {
+    .board,
+    .board.three {
       grid-template-columns: 1fr;
     }
   }
@@ -723,7 +732,7 @@
   }
   .claim-kids {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     grid-gap: 10px;
     margin-bottom: 12px;
   }

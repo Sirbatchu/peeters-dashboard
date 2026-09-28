@@ -14,9 +14,26 @@
 # The host matcher ignores the port, so the site address stays as below.
 
 (site) {
-	# API and calendar feed proxy to the api container
+	# API and calendar feed proxy to the api container.
+	#
+	# Exception: Alexa's emulated Hue bridge ("Alexa, bedtime"). It runs in
+	# Home Assistant on 192.168.10.6:8300, but Echos only discover a Hue bridge
+	# on port 80 — so HA advertises port 80 and these paths are forwarded to
+	# it. HA's bridge always hands out the username "nouser" (hue_api.py), so
+	# /api/nouser* can never collide with the dashboard's own /api routes.
+	# `route` keeps the order literal: Hue first, everything else to the API.
 	handle /api/* {
-		reverse_proxy api:3000
+		route {
+			reverse_proxy /api/nouser* 192.168.10.6:8300
+			reverse_proxy api:3000
+		}
+	}
+	# Hue pairing (POST /api) and discovery document.
+	handle /api {
+		reverse_proxy 192.168.10.6:8300
+	}
+	handle /description.xml {
+		reverse_proxy 192.168.10.6:8300
 	}
 
 	# Hashed build assets: filename changes whenever content changes,

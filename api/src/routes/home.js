@@ -1,25 +1,5 @@
-// Bridge to Home Assistant. The iPad only ever talks to us; we hold the
-// HA token server-side. Every feature degrades gracefully when HA_TOKEN
-// is unset so the dashboard works before HA is configured.
-
-const HA_URL = process.env.HA_URL || 'http://host.docker.internal:8123';
-
-const configured = () => Boolean(process.env.HA_TOKEN);
-
-async function ha(path, options = {}) {
-  const res = await fetch(`${HA_URL}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${process.env.HA_TOKEN}`,
-      'Content-Type': 'application/json',
-      ...options.headers
-    },
-    signal: AbortSignal.timeout(10_000)
-  });
-  if (!res.ok) throw new Error(`HA ${path} -> ${res.status}`);
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
-}
+// Bridge to Home Assistant: media, phones, cameras. Client lives in ../ha.js.
+import { ha, configured, HA_URL } from '../ha.js';
 
 export default async function routes(app) {
   app.get('/home/status', async () => {
