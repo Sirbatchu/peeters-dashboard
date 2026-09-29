@@ -101,7 +101,9 @@ volume (separate from the idle-slideshow `photos/` folder).
 
 ## Settings
 
-Times and toggles live in the `settings` table, editable over the API:
+Tap **⚙️** (end of the tab row, or in the full-screen bar) to change the school-run
+times and school days from the tablet. They're saved on the Mini, so every screen
+follows. Everything also lives in the `settings` table, editable over the API:
 
 ```bash
 curl -X PUT http://192.168.10.6/api/settings \

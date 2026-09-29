@@ -8,12 +8,14 @@
   import Music from './lib/Music.svelte';
   import PhotoFrame from './lib/PhotoFrame.svelte';
   import Backdrop from './lib/Backdrop.svelte';
+  import Settings from './lib/Settings.svelte';
   import { api } from './api.js';
 
   let tab = $state('calendar');
   let weatherCode = $state(113);
   let online = $state(true);
   let settings = $state({});
+  let showSettings = $state(false);
   let now = $state(new Date());
   // Full screen: header and tabs give way to a slim bar that flips between
   // the calendar and the kids' board. Entered from the calendar's ⛶ button.
@@ -173,6 +175,7 @@
         {/each}
       </div>
       <div class="fb-right">
+        <button class="fb-exit" onclick={() => (showSettings = true)} title="Settings">⚙️</button>
         <button class="fb-exit" class:on={dimmed} onclick={toggleDim}>{dimmed ? '☀️ Brighten' : '🌙 Dim'}</button>
         <button class="fb-exit" onclick={() => (full = false)}>✕ Exit full screen</button>
       </div>
@@ -189,6 +192,7 @@
     <button class="tab dim-btn" class:active={dimmed} onclick={toggleDim} title={dimmed ? 'Brighten' : 'Dim'}>
       {dimmed ? '☀️' : '🌙'}
     </button>
+    <button class="tab dim-btn" onclick={() => (showSettings = true)} title="Settings">⚙️</button>
   </nav>
 
   <main>
@@ -208,6 +212,11 @@
 
 {#if dimmed}
   <div class="night-veil"></div>
+{/if}
+
+<!-- Outside .shell so the dim filter doesn't darken the panel. -->
+{#if showSettings}
+  <Settings {settings} onclose={() => (showSettings = false)} onsaved={(s) => (settings = s)} />
 {/if}
 
 <PhotoFrame idleMins={10} />
@@ -280,7 +289,7 @@
   }
   .tabs {
     display: grid;
-    grid-template-columns: repeat(5, 1fr) auto;
+    grid-template-columns: repeat(5, 1fr) auto auto;
     grid-gap: 10px;
     padding: 12px 16px 0;
     max-width: 1100px;
