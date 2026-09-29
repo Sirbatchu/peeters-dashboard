@@ -82,6 +82,27 @@ button for full screen: the header and tabs give way to a slim bar with the cloc
 **Calendar / Kids** switch, and **✕ Exit full screen**. Tap a month name in Year view
 to open it, or any day for its events.
 
+## Who an event is for
+
+Every event belongs to a person (or a shared bucket), and that choice drives its
+colour everywhere in the calendar. Pick it from the colour chips in the event form.
+
+| Who | Colour |
+| --- | --- |
+| Family (default, shared) | slate `#64748b` |
+| Matthew Peeters | purple `#8b5cf6` |
+| Jamie-Lee | baby blue `#7dd3fc` |
+| Malachi | blue `#3b82f6` |
+| Atticus | green `#10b981` |
+| Waverly | light pink `#f9a8d4` |
+
+Text on an event pill is black or white depending on the colour's perceived
+brightness, so the pale pink and baby blue stay readable. Add or recolour people
+in the `calendars` table (`sort_order` sets the chip order) — no code change needed.
+
+Tap the **pencil** next to an event in the day view to edit it. Editing one
+occurrence of a repeating event changes the whole series.
+
 ## Dimming
 
 There is no automatic bedtime dim. Tap **🌙** (end of the tab row, or **🌙 Dim** in the

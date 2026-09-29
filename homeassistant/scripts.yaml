@@ -1,0 +1,6 @@
+bedtime:
+  alias: Bedtime
+  icon: mdi:weather-night
+  mode: single
+  sequence:
+    - action: rest_command.peeters_bedtime

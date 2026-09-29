@@ -28,7 +28,12 @@ function expand(ev, start, end, cap = 500) {
         ...ev,
         starts_at: cur.toISOString(),
         ends_at: new Date(cur.getTime() + duration).toISOString(),
-        occurrence_date: cur.toISOString().slice(0, 10)
+        occurrence_date: cur.toISOString().slice(0, 10),
+        // The series' own first start/end. Editing an occurrence edits the
+        // whole series, so the form must load these rather than the
+        // occurrence's shifted dates - otherwise saving slides the series.
+        series_starts_at: ev.starts_at,
+        series_ends_at: ev.ends_at
       });
     }
     // Month/year stepping uses calendar math so "the 15th" stays the 15th.
@@ -44,9 +49,29 @@ function expand(ev, start, end, cap = 500) {
   return out;
 }
 
+/**
+ * Every occurrence overlapping [start, end], recurrences expanded, sorted.
+ * Shared by the calendar grid, the Next-up strip and the Alexa briefing.
+ */
+export async function eventsBetween(start, end) {
+  const { rows } = await q(
+    `SELECT e.*, c.colour, c.label AS calendar_label
+       FROM events e
+       JOIN calendars c ON c.slug = e.calendar
+      WHERE (e.recur_freq IS NOT NULL AND e.starts_at <= $2
+             AND (e.recur_until IS NULL OR e.recur_until >= $1::date))
+         OR (e.recur_freq IS NULL AND e.ends_at >= $1 AND e.starts_at <= $2)
+      ORDER BY e.starts_at`,
+    [start, end]
+  );
+  return rows
+    .flatMap((ev) => expand(ev, start, end))
+    .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+}
+
 export default async function routes(app) {
   app.get('/calendars', async () => {
-    const { rows } = await q('SELECT slug, label, colour FROM calendars ORDER BY slug');
+    const { rows } = await q('SELECT slug, label, colour FROM calendars ORDER BY sort_order, label');
     return rows;
   });
 
@@ -54,19 +79,7 @@ export default async function routes(app) {
   app.get('/events', async (req) => {
     const start = req.query.start || new Date(Date.now() - 90 * 864e5).toISOString();
     const end = req.query.end || new Date(Date.now() + 365 * 864e5).toISOString();
-    const { rows } = await q(
-      `SELECT e.*, c.colour, c.label AS calendar_label
-         FROM events e
-         JOIN calendars c ON c.slug = e.calendar
-        WHERE (e.recur_freq IS NOT NULL AND e.starts_at <= $2
-               AND (e.recur_until IS NULL OR e.recur_until >= $1::date))
-           OR (e.recur_freq IS NULL AND e.ends_at >= $1 AND e.starts_at <= $2)
-        ORDER BY e.starts_at`,
-      [start, end]
-    );
-    return rows
-      .flatMap((ev) => expand(ev, start, end))
-      .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+    return eventsBetween(start, end);
   });
 
   app.post('/events', async (req, reply) => {

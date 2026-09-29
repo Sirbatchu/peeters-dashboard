@@ -30,6 +30,22 @@
     { value: 'yearly', label: 'Yearly' }
   ];
 
+  /**
+   * Readable text on any calendar colour. Waverly's pink and Jamie-Lee's
+   * baby blue are far too light for the white text the darker colours use,
+   * and hard-coding per person would break the moment a colour changes.
+   */
+  function textOn(hex) {
+    var h = String(hex || '').replace('#', '');
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    if (h.length !== 6) return '#ffffff';
+    var r = parseInt(h.slice(0, 2), 16);
+    var g = parseInt(h.slice(2, 4), 16);
+    var b = parseInt(h.slice(4, 6), 16);
+    // Perceived brightness (ITU-R BT.601)
+    return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#1e293b' : '#ffffff';
+  }
+
   function blankForm(date) {
     var d = date || ymd(new Date());
     return {
@@ -47,8 +63,41 @@
     };
   }
 
+  // null while creating; the event being changed while editing.
+  let editing = $state(null);
+
   function openForm(date) {
+    editing = null;
     form = blankForm(date);
+    selected = null;
+    showForm = true;
+  }
+
+  /** Open the form pre-filled from an existing event. */
+  function openEdit(ev) {
+    // For a repeat, load the series' own dates, not this occurrence's.
+    var s = new Date(ev.series_starts_at || ev.starts_at);
+    var e = new Date(ev.series_ends_at || ev.ends_at);
+    var hhmm = function (d) {
+      return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    };
+    editing = ev;
+    form = {
+      title: ev.title,
+      calendar: ev.calendar,
+      date: ymd(s),
+      time: hhmm(s),
+      endDate: ymd(e),
+      endTime: hhmm(e),
+      allDay: !!ev.all_day,
+      location: ev.location || '',
+      emails: '',
+      repeat:
+        ev.recur_freq === 'weekly' && ev.recur_interval === 2
+          ? 'fortnightly'
+          : ev.recur_freq || '',
+      until: ev.recur_until || ''
+    };
     selected = null;
     showForm = true;
   }
@@ -320,7 +369,7 @@
       }
       // "fortnightly" is weekly with interval 2 under the hood
       const freq = form.repeat === 'fortnightly' ? 'weekly' : form.repeat || null;
-      const created = await api.post('/events', {
+      const payload = {
         title: form.title.trim(),
         calendar: form.calendar,
         location: form.location.trim() || null,
@@ -330,10 +379,15 @@
         recur_freq: freq,
         recur_interval: form.repeat === 'fortnightly' ? 2 : 1,
         recur_until: form.repeat && form.until ? form.until : null
-      });
+      };
+
+      const saved = editing
+        ? await api.patch('/events/' + editing.id, payload)
+        : await api.post('/events', payload);
+
       const emails = form.emails.split(/[,;\s]+/).filter(Boolean);
       if (emails.length && invitesEnabled) {
-        await api.post('/events/' + created.id + '/invite', { emails });
+        await api.post('/events/' + saved.id + '/invite', { emails });
       }
       showForm = false;
       await load();
@@ -453,7 +507,7 @@
               <div class="pill bday">🎂 {b.name}</div>
             {/each}
             {#each cell.events.slice(0, 3) as ev (ev.id + cell.key)}
-              <div class="pill" style="background:{ev.colour}">{ev.recur_freq ? '↻ ' : ''}{ev.title}</div>
+              <div class="pill" style="background:{ev.colour};color:{textOn(ev.colour)}">{ev.recur_freq ? '↻ ' : ''}{ev.title}</div>
             {/each}
             {#if cell.events.length > 3}
               <div class="more">+{cell.events.length - 3} more</div>
@@ -518,7 +572,8 @@
               {ev.location ? ' · ' + ev.location : ''} · {ev.calendar_label}
             </div>
           </div>
-          <button class="del" onclick={() => removeEvent(ev)}>🗑</button>
+          <button class="edit" onclick={() => openEdit(ev)} title="Edit">✎</button>
+          <button class="del" onclick={() => removeEvent(ev)} title="Delete">🗑</button>
         </div>
       {/each}
 
@@ -546,7 +601,7 @@
       tabindex="-1"
     >
       <div class="modal-head">
-        <div class="modal-title">New event</div>
+        <div class="modal-title">{editing ? 'Edit event' : 'New event'}</div>
         <button class="close" onclick={() => (showForm = false)}>✕</button>
       </div>
 
@@ -570,12 +625,25 @@
           <input type="checkbox" bind:checked={form.allDay} />
           <span>All day / no set times</span>
         </label>
-        <div class="row">
-          <select bind:value={form.calendar}>
+        <label class="fld">
+          <span>Who's it for?</span>
+          <span class="who">
             {#each calendars as c (c.slug)}
-              <option value={c.slug}>{c.label}</option>
+              <button
+                type="button"
+                class="chip"
+                class:sel={form.calendar === c.slug}
+                style={form.calendar === c.slug
+                  ? 'background:' + c.colour + ';color:' + textOn(c.colour) + ';border-color:' + c.colour
+                  : 'border-color:' + c.colour}
+                onclick={() => (form.calendar = c.slug)}
+              >
+                <span class="dot" style="background:{c.colour}"></span>{c.label}
+              </button>
             {/each}
-          </select>
+          </span>
+        </label>
+        <div class="row">
           <select bind:value={form.repeat}>
             {#each REPEATS as r (r.value)}
               <option value={r.value}>{r.label}</option>
@@ -593,7 +661,7 @@
           <input placeholder="Invite emails, comma separated (optional)" bind:value={form.emails} />
         {/if}
         <button class="primary" disabled={busy || !form.title.trim()} onclick={createEvent}>
-          {busy ? 'Saving…' : 'Add event'}
+          {busy ? 'Saving…' : editing ? 'Save changes' : 'Add event'}
         </button>
       </div>
     </div>
@@ -966,9 +1034,45 @@
     font-size: 12px;
     color: var(--text-muted);
   }
-  .del {
+  .del,
+  .edit {
     font-size: 16px;
-    padding: 6px;
+    padding: 6px 8px;
+  }
+  .edit {
+    color: var(--text-muted);
+  }
+
+  /* Who's-it-for colour chips */
+  .who {
+    display: -webkit-box;
+    display: flex;
+    -webkit-box-orient: horizontal;
+    -webkit-box-lines: multiple;
+    flex-wrap: wrap;
+    margin: -3px;
+  }
+  .chip {
+    margin: 3px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 2px solid var(--border);
+    background: #fff;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+  }
+  .chip .dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: 0;
+  }
+  .chip.sel .dot {
+    display: none;
   }
   .empty {
     color: var(--text-muted);

@@ -9,13 +9,19 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE TABLE calendars (
   slug        TEXT PRIMARY KEY,
   label       TEXT NOT NULL,
-  colour      TEXT NOT NULL
+  colour      TEXT NOT NULL,
+  sort_order  INT  NOT NULL DEFAULT 50
 );
 
-INSERT INTO calendars (slug, label, colour) VALUES
-  ('matt',   'Matt',   '#3b82f6'),
-  ('family', 'Family', '#10b981'),
-  ('forest', 'Forest', '#f97316');
+-- One row per person the dashboard colour-codes by, plus the shared buckets.
+-- Family is deliberately neutral slate; the greens/blues belong to people.
+INSERT INTO calendars (slug, label, colour, sort_order) VALUES
+  ('family',    'Family',          '#64748b', 0),
+  ('matt',      'Matthew Peeters', '#8b5cf6', 1),
+  ('jamie-lee', 'Jamie-Lee',       '#7dd3fc', 2),
+  ('malachi',   'Malachi',         '#3b82f6', 3),
+  ('atticus',   'Atticus',         '#10b981', 4),
+  ('waverly',   'Waverly',         '#f9a8d4', 5);
 
 CREATE TABLE events (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -60,8 +66,9 @@ CREATE TABLE kids (
 );
 
 INSERT INTO kids (slug, name, colour, emoji, sort_order) VALUES
-  ('malachi', 'Malachi', '#6366f1', '🦖', 1),
-  ('atticus', 'Atticus', '#ec4899', '🚀', 2);
+  ('malachi', 'Malachi', '#3b82f6', '🚀', 1),
+  ('atticus', 'Atticus', '#10b981', '🦖', 2),
+  ('waverly', 'Waverly', '#f9a8d4', '🦄', 3);
 
 -- Editable from the UI, so the list changes without a deploy.
 CREATE TABLE checklist_items (
@@ -169,3 +176,39 @@ INSERT INTO settings (key, value) VALUES
   ('background_mode',  'sky'),  -- sky | photo | slideshow
   ('background_photo', ''),     -- file name when mode = photo
   ('background_mins',  '15');   -- slideshow interval
+
+-- ─────────────────────────────────────────────
+-- RECIPES, NOTES, ALEXA
+-- ─────────────────────────────────────────────
+-- Reusable meals with ingredient lists, so a planned dinner can fill the
+-- shopping list in one tap.
+CREATE TABLE recipes (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title       TEXT NOT NULL UNIQUE,
+  emoji       TEXT NOT NULL DEFAULT '🍽️',
+  ingredients TEXT[] NOT NULL DEFAULT '{}',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE meals ADD COLUMN recipe_id UUID REFERENCES recipes(id) ON DELETE SET NULL;
+
+-- Family notes board. Author is a calendars slug so notes share people's colours.
+CREATE TABLE notes (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  body       TEXT NOT NULL,
+  author     TEXT REFERENCES calendars(slug) ON DELETE SET NULL,
+  pinned     BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Alexa morning briefing + bedtime. Targets are Home Assistant notify
+-- entities from the Alexa Devices integration.
+INSERT INTO settings (key, value) VALUES
+  ('briefing_enabled', '1'),
+  ('briefing_time',    '07:15'),
+  ('briefing_days',    '12345'),
+  ('briefing_target',  'notify.kitchen_speak'),
+  ('briefing_last',    ''),
+  ('bedtime_target',   'notify.bedroom_speak'),
+  ('bedtime_command',  'play relaxing sleep music'),
+  ('bedtime_message',  'Goodnight everyone. Time to wind down.'),
+  ('dim_command',      '');

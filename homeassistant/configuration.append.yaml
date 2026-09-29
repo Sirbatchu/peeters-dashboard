@@ -1,0 +1,23 @@
+
+# ── Peeters dashboard: voice control ──────────────────────────────────
+# Exposes chosen scripts to Alexa as Hue "lights" ("Alexa, turn on Bedtime").
+# Echos only discover a Hue bridge on port 80, which the dashboard's Caddy
+# owns, so HA listens on 8300 and advertises port 80; Caddy forwards the Hue
+# paths (/description.xml, /api, /api/nouser/*) here. See web/Caddyfile.
+emulated_hue:
+  listen_port: 8300
+  advertise_ip: 192.168.10.6
+  advertise_port: 80
+  expose_by_default: false
+  entities:
+    script.bedtime:
+      name: Bedtime
+      hidden: false
+
+# The dashboard API does the work (dim screens, goodnight, music).
+rest_command:
+  peeters_bedtime:
+    url: http://127.0.0.1/api/bedtime
+    method: POST
+    content_type: application/json
+    payload: '{"source":"alexa"}'

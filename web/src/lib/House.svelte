@@ -1,6 +1,7 @@
 <script>
   import { api } from '../api.js';
   import qrcode from 'qrcode-generator';
+  import Alexa from './Alexa.svelte';
 
   // Phones open the uploader over plain http (no CA needed on each phone).
   const photosUrl = 'http://' + location.hostname + '/photos';
@@ -109,6 +110,8 @@
     </p>
   </div>
 {:else}
+  <Alexa />
+
   <div class="card panel">
     <div class="panel-title">📱 Phone finder</div>
     {#if phones.length}
