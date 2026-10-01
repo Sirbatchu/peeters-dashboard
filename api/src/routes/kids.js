@@ -237,8 +237,9 @@ export default async function routes(app) {
   });
 
   app.post('/kids/:slug/awards', async (req, reply) => {
-    const { points, note, by, pin } = req.body || {};
-    if (!pinOk(pin)) return reply.status(403).send({ error: 'Wrong PIN' });
+    // No PIN for awards for now (the giver's name is recorded instead).
+    // Reward claims still need the PIN.
+    const { points, note, by } = req.body || {};
     const pts = Number(points);
     if (!Number.isInteger(pts) || pts < 1 || pts > 100) {
       return reply.status(400).send({ error: 'points must be a whole number from 1 to 100' });
@@ -260,9 +261,8 @@ export default async function routes(app) {
     return reply.status(201).send({ ...rows[0], stars: bal[0].total });
   });
 
-  // Undo a mistaken award. POST (not DELETE) so the PIN travels in the body.
+  // Undo a mistaken award.
   app.post('/awards/:id/remove', async (req, reply) => {
-    if (!pinOk((req.body || {}).pin)) return reply.status(403).send({ error: 'Wrong PIN' });
     if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return reply.status(404).send({ error: 'no such award' });
     const { rowCount } = await q('DELETE FROM kid_awards WHERE id = $1', [req.params.id]);
     if (!rowCount) return reply.status(404).send({ error: 'already removed' });
