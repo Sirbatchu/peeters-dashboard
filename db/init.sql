@@ -113,8 +113,22 @@ CREATE TABLE kid_days (
   PRIMARY KEY (kid_slug, day)
 );
 
+-- Bonus stars a parent gives for doing something good, with a note
+-- saying what it was for and who gave them. (The API also creates this
+-- on startup, for databases set up before it existed.)
+CREATE TABLE kid_awards (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kid_slug   TEXT NOT NULL REFERENCES kids(slug) ON DELETE CASCADE,
+  points     INT  NOT NULL CHECK (points > 0),
+  note       TEXT NOT NULL,
+  awarded_by TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX kid_awards_kid_idx ON kid_awards (kid_slug, created_at DESC);
+
 -- Things kids are saving their stars up for. Claiming spends stars:
--- balance = SUM(kid_days.points) - SUM(claimed rewards' cost).
+-- balance = SUM(kid_days.points) + SUM(kid_awards.points)
+--         - SUM(claimed rewards' cost).
 CREATE TABLE rewards (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   kid_slug    TEXT REFERENCES kids(slug) ON DELETE CASCADE,  -- NULL = any kid
