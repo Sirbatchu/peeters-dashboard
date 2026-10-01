@@ -7,6 +7,15 @@ const ITEMS_SQL = `
    WHERE active AND (kid_slug IS NULL OR kid_slug = $1)
    ORDER BY sort_order, label`;
 
+// Balance = stars earned from checklists + stars awarded by a parent
+// - stars spent on claimed rewards.
+const BALANCE_SQL = `
+  SELECT COALESCE((SELECT SUM(points) FROM kid_days WHERE kid_slug = $1), 0)::int
+       + COALESCE((SELECT SUM(points) FROM kid_awards WHERE kid_slug = $1), 0)::int
+       - COALESCE((SELECT SUM(cost) FROM rewards WHERE claimed_by = $1), 0)::int AS total`;
+
+const pinOk = (pin) => pin === (process.env.PARENT_PIN || '1234');
+
 async function stateFor(slug, day) {
   const [{ rows: items }, { rows: ticks }] = await Promise.all([
     q(ITEMS_SQL, [slug]),
@@ -68,6 +77,18 @@ async function streakFor(slug, day) {
 }
 
 export default async function routes(app) {
+  // Added after launch: init.sql only runs on a fresh database, so make
+  // sure the live one has the table too.
+  await q(`CREATE TABLE IF NOT EXISTS kid_awards (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    kid_slug   TEXT NOT NULL REFERENCES kids(slug) ON DELETE CASCADE,
+    points     INT  NOT NULL CHECK (points > 0),
+    note       TEXT NOT NULL,
+    awarded_by TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+  await q('CREATE INDEX IF NOT EXISTS kid_awards_kid_idx ON kid_awards (kid_slug, created_at DESC)');
+
   // Everything the kids' board needs, in one request.
   app.get('/kids', async () => {
     const day = today();
@@ -78,11 +99,7 @@ export default async function routes(app) {
         const items = await stateFor(kid.slug, day);
         const [{ rows: totals }, streak] = await Promise.all([
           // Balance = stars earned minus stars spent on claimed rewards.
-          q(
-            `SELECT COALESCE((SELECT SUM(points) FROM kid_days WHERE kid_slug = $1), 0)::int
-                  - COALESCE((SELECT SUM(cost) FROM rewards WHERE claimed_by = $1), 0)::int AS total`,
-            [kid.slug]
-          ),
+          q(BALANCE_SQL, [kid.slug]),
           streakFor(kid.slug, day)
         ]);
         const doneCount = items.filter((i) => i.done).length;
@@ -182,7 +199,7 @@ export default async function routes(app) {
   app.post('/rewards/:id/claim', async (req, reply) => {
     const { kid_slug, pin } = req.body || {};
     if (!kid_slug) return reply.status(400).send({ error: 'kid_slug required' });
-    if (pin !== (process.env.PARENT_PIN || '1234')) {
+    if (!pinOk(pin)) {
       return reply.status(403).send({ error: 'Wrong PIN' });
     }
 
@@ -195,11 +212,7 @@ export default async function routes(app) {
       return reply.status(400).send({ error: 'that reward belongs to someone else' });
     }
 
-    const { rows: bal } = await q(
-      `SELECT COALESCE((SELECT SUM(points) FROM kid_days WHERE kid_slug = $1), 0)::int
-            - COALESCE((SELECT SUM(cost) FROM rewards WHERE claimed_by = $1), 0)::int AS total`,
-      [kid_slug]
-    );
+    const { rows: bal } = await q(BALANCE_SQL, [kid_slug]);
     if (bal[0].total < rw[0].cost) {
       return reply.status(400).send({ error: `needs ${rw[0].cost - bal[0].total} more stars` });
     }
@@ -209,5 +222,50 @@ export default async function routes(app) {
       [req.params.id, kid_slug]
     );
     return rows[0];
+  });
+
+  // ── Bonus stars, awarded by a parent with a note saying why and who ──
+  app.get('/kids/:slug/awards', async (req) => {
+    const limit = Math.min(Number(req.query.limit) || 20, 100);
+    const { rows } = await q(
+      `SELECT id, kid_slug, points, note, awarded_by, created_at
+         FROM kid_awards WHERE kid_slug = $1
+        ORDER BY created_at DESC LIMIT $2`,
+      [req.params.slug, limit]
+    );
+    return rows;
+  });
+
+  app.post('/kids/:slug/awards', async (req, reply) => {
+    const { points, note, by, pin } = req.body || {};
+    if (!pinOk(pin)) return reply.status(403).send({ error: 'Wrong PIN' });
+    const pts = Number(points);
+    if (!Number.isInteger(pts) || pts < 1 || pts > 100) {
+      return reply.status(400).send({ error: 'points must be a whole number from 1 to 100' });
+    }
+    const text = String(note || '').trim();
+    const who = String(by || '').trim();
+    if (!text) return reply.status(400).send({ error: 'Add a note saying what it was for' });
+    if (!who) return reply.status(400).send({ error: 'Say who is giving the stars' });
+
+    const { rows: kid } = await q('SELECT slug FROM kids WHERE slug = $1', [req.params.slug]);
+    if (!kid.length) return reply.status(404).send({ error: 'no such kid' });
+
+    const { rows } = await q(
+      `INSERT INTO kid_awards (kid_slug, points, note, awarded_by)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [req.params.slug, pts, text.slice(0, 200), who.slice(0, 40)]
+    );
+    const { rows: bal } = await q(BALANCE_SQL, [req.params.slug]);
+    return reply.status(201).send({ ...rows[0], stars: bal[0].total });
+  });
+
+  // Undo a mistaken award. POST (not DELETE) so the PIN travels in the body.
+  app.post('/awards/:id/remove', async (req, reply) => {
+    if (!pinOk((req.body || {}).pin)) return reply.status(403).send({ error: 'Wrong PIN' });
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return reply.status(404).send({ error: 'no such award' });
+    const { rowCount } = await q('DELETE FROM kid_awards WHERE id = $1', [req.params.id]);
+    if (!rowCount) return reply.status(404).send({ error: 'already removed' });
+    return reply.status(204).send();
   });
 }

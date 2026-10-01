@@ -23,6 +23,93 @@
   let claimPin = $state('');
   let claimError = $state('');
 
+  // Bonus stars from a parent, with a note saying what for and who gave them
+  const AWARD_POINTS = [1, 2, 3, 5, 10];
+  const GIVERS = ['Mummy', 'Daddy'];
+  let awardKid = $state(null); // kid the award panel is open for
+  let awardPoints = $state(1);
+  let awardNote = $state('');
+  let awardBy = $state(savedGiver());
+  let awardPin = $state('');
+  let awardError = $state('');
+  let awardBusy = $state(false);
+  let awardList = $state([]);
+
+  // The last giver is remembered per screen, so it's usually one tap.
+  function savedGiver() {
+    try {
+      return localStorage.getItem('awardBy') || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  async function openAward(kid) {
+    awardKid = kid;
+    awardPoints = 1;
+    awardNote = '';
+    awardPin = '';
+    awardError = '';
+    awardList = [];
+    try {
+      awardList = await api.get('/kids/' + kid.slug + '/awards?limit=10');
+    } catch (e) {
+      /* the form still works without the history */
+    }
+  }
+
+  async function giveAward(evt) {
+    if (awardBusy) return;
+    awardError = '';
+    if (!awardNote.trim()) return (awardError = 'Add a note saying what it was for');
+    if (!awardBy.trim()) return (awardError = 'Choose who is giving the stars');
+    if (!awardPin) return (awardError = 'Enter the parent PIN');
+    awardBusy = true;
+    try {
+      const res = await api.post('/kids/' + awardKid.slug + '/awards', {
+        points: awardPoints,
+        note: awardNote.trim(),
+        by: awardBy.trim(),
+        pin: awardPin
+      });
+      try {
+        localStorage.setItem('awardBy', awardBy.trim());
+      } catch (e) {
+        /* ignore */
+      }
+      kids = kids.map((k) => (k.slug === awardKid.slug ? { ...k, stars: res.stars } : k));
+      awardKid = null;
+      if (evt) confettiAt(evt.clientX, evt.clientY);
+    } catch (e) {
+      awardError = e.message;
+    } finally {
+      awardBusy = false;
+    }
+  }
+
+  async function removeAward(a) {
+    if (!awardPin) return (awardError = 'Enter the parent PIN first, then tap 🗑 again');
+    if (!confirm('Remove +' + a.points + ' ⭐ "' + a.note + '"?')) return;
+    try {
+      await api.post('/awards/' + a.id + '/remove', { pin: awardPin });
+      awardList = awardList.filter((x) => x.id !== a.id);
+      const fresh = await api.get('/kids');
+      kids = fresh;
+      awardKid = fresh.find((k) => k.slug === awardKid.slug) || awardKid;
+    } catch (e) {
+      awardError = e.message;
+    }
+  }
+
+  function whenStr(iso) {
+    const d = new Date(iso);
+    return (
+      d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) +
+      ' ' +
+      d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    );
+  }
+
   async function load() {
     try {
       const [k, r] = await Promise.all([api.get('/kids'), api.get('/rewards')]);
@@ -204,6 +291,7 @@
           <div class="kid-name">{kid.name}</div>
           <div class="kid-stats">
             <span class="stat stars">⭐ {kid.stars}</span>
+            <button class="stat award-btn" onclick={() => openAward(kid)}>＋ Award</button>
             {#if kid.streak > 1}<span class="stat streak">🔥 {kid.streak} day streak</span>{/if}
           </div>
         </div>
@@ -333,6 +421,92 @@
       />
       {#if claimError}<div class="claim-err">{claimError}</div>{/if}
       <button class="claim-go" onclick={confirmClaim}>Claim it! 🎉</button>
+    </div>
+  </div>
+{/if}
+
+{#if awardKid}
+  <div
+    class="overlay"
+    onclick={() => (awardKid = null)}
+    onkeydown={(e) => e.key === 'Escape' && (awardKid = null)}
+    role="presentation"
+  >
+    <div
+      class="modal card award"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+      role="dialog"
+      tabindex="-1"
+    >
+      <div class="claim-head">{awardKid.emoji} Award stars to {awardKid.name}</div>
+      <div class="claim-cost">has ⭐ {awardKid.stars}</div>
+
+      <div class="aw-label">How many stars?</div>
+      <div class="aw-points">
+        {#each AWARD_POINTS as n (n)}
+          <button
+            class="aw-pt"
+            class:sel={awardPoints === n}
+            style={awardPoints === n ? 'border-color:' + awardKid.colour : ''}
+            onclick={() => (awardPoints = n)}
+          >
+            +{n}
+          </button>
+        {/each}
+      </div>
+
+      <div class="aw-label">What did they do?</div>
+      <textarea
+        class="aw-note"
+        rows="2"
+        maxlength="200"
+        placeholder="e.g. Helped tidy the kitchen without being asked"
+        bind:value={awardNote}
+      ></textarea>
+
+      <div class="aw-label">From</div>
+      <div class="aw-from">
+        {#each GIVERS as g (g)}
+          <button class="aw-giver" class:sel={awardBy === g} onclick={() => (awardBy = g)}>{g}</button>
+        {/each}
+        <input
+          class="aw-other"
+          placeholder="Someone else…"
+          maxlength="40"
+          value={GIVERS.indexOf(awardBy) === -1 ? awardBy : ''}
+          oninput={(e) => (awardBy = e.target.value)}
+        />
+      </div>
+
+      <input
+        class="pin"
+        type="password"
+        inputmode="numeric"
+        placeholder="Parent PIN"
+        bind:value={awardPin}
+        onkeydown={(e) => e.key === 'Enter' && giveAward()}
+      />
+      {#if awardError}<div class="claim-err">{awardError}</div>{/if}
+      <button class="claim-go" disabled={awardBusy} onclick={giveAward}>
+        {awardBusy ? 'Saving…' : 'Give ' + awardPoints + ' ⭐'}
+      </button>
+
+      {#if awardList.length}
+        <div class="aw-hist-title">Recent awards</div>
+        <div class="aw-hist">
+          {#each awardList as a (a.id)}
+            <div class="aw-row">
+              <span class="aw-row-pts">+{a.points} ⭐</span>
+              <span class="aw-row-body">
+                <span class="aw-row-note">{a.note}</span>
+                <span class="aw-row-meta">{a.awarded_by} · {whenStr(a.created_at)}</span>
+              </span>
+              <button class="aw-del" onclick={() => removeAward(a)} title="Remove">🗑</button>
+            </div>
+          {/each}
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
@@ -769,6 +943,106 @@
     color: #b91c1c;
     font-size: 13px;
     margin-top: 8px;
+  }
+  /* Bonus-star awards */
+  .stat.award-btn {
+    background: var(--header);
+    color: #fff;
+    cursor: pointer;
+  }
+  .modal.award {
+    max-height: 90vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .aw-label {
+    text-align: left;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin: 10px 0 5px;
+  }
+  .aw-points {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-gap: 8px;
+  }
+  .aw-pt,
+  .aw-giver {
+    padding: 10px 4px;
+    border-radius: 10px;
+    background: var(--bg);
+    border: 3px solid transparent;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .aw-pt.sel {
+    background: #fff;
+  }
+  .aw-giver {
+    font-size: 14px;
+    padding: 9px 14px;
+  }
+  .aw-giver.sel {
+    background: var(--header);
+    color: #fff;
+  }
+  .aw-note,
+  .aw-other {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 15px;
+    background: #fff;
+    -webkit-appearance: none;
+  }
+  .aw-note {
+    resize: none;
+  }
+  .aw-from {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-gap: 8px;
+    margin-bottom: 12px;
+  }
+  .aw-hist-title {
+    text-align: left;
+    font-size: 13px;
+    font-weight: 700;
+    margin: 16px 0 6px;
+  }
+  .aw-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-gap: 10px;
+    align-items: center;
+    text-align: left;
+    padding: 7px 0;
+    border-top: 1px solid var(--border);
+  }
+  .aw-row-pts {
+    font-weight: 700;
+    color: #b45309;
+    white-space: nowrap;
+  }
+  .aw-row-note {
+    display: block;
+    font-size: 14px;
+  }
+  .aw-row-meta {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .aw-del {
+    font-size: 15px;
+    padding: 4px;
+  }
+  .claim-go:disabled {
+    opacity: 0.6;
   }
   .claim-go {
     display: block;
