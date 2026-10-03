@@ -14,7 +14,7 @@ const BALANCE_SQL = `
        + COALESCE((SELECT SUM(points) FROM kid_awards WHERE kid_slug = $1), 0)::int
        - COALESCE((SELECT SUM(cost) FROM rewards WHERE claimed_by = $1), 0)::int AS total`;
 
-const pinOk = (pin) => pin === (process.env.PARENT_PIN || '1234');
+const pinOk = (pin) => pin === (process.env.PARENT_PIN || '290915');
 
 async function stateFor(slug, day) {
   const [{ rows: items }, { rows: ticks }] = await Promise.all([

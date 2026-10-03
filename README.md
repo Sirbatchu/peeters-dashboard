@@ -139,7 +139,7 @@ curl -X PUT http://192.168.10.6/api/settings \
 | `background_mode` | `sky` | `sky`, `photo` or `slideshow` (set from `/photos`) |
 | `background_photo` / `background_mins` | — / 15 | Chosen photo; slideshow interval |
 
-`PARENT_PIN` (in `.env`, default `1234`) gates reward claims.
+`PARENT_PIN` (in `.env`, default `290915`) gates reward claims.
 
 ### Bonus stars
 
