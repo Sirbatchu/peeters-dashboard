@@ -14,8 +14,6 @@ const BALANCE_SQL = `
        + COALESCE((SELECT SUM(points) FROM kid_awards WHERE kid_slug = $1), 0)::int
        - COALESCE((SELECT SUM(cost) FROM rewards WHERE claimed_by = $1), 0)::int AS total`;
 
-const pinOk = (pin) => pin === (process.env.PARENT_PIN || '290915');
-
 async function stateFor(slug, day) {
   const [{ rows: items }, { rows: ticks }] = await Promise.all([
     q(ITEMS_SQL, [slug]),
@@ -195,13 +193,11 @@ export default async function routes(app) {
     return rows;
   });
 
-  // Claiming is parent-gated by PIN and spends the kid's star balance.
+  // Claiming spends the kid's star balance. No PIN: the family asked for
+  // claims and awards to be open.
   app.post('/rewards/:id/claim', async (req, reply) => {
-    const { kid_slug, pin } = req.body || {};
+    const { kid_slug } = req.body || {};
     if (!kid_slug) return reply.status(400).send({ error: 'kid_slug required' });
-    if (!pinOk(pin)) {
-      return reply.status(403).send({ error: 'Wrong PIN' });
-    }
 
     const { rows: rw } = await q(
       'SELECT * FROM rewards WHERE id = $1 AND active AND claimed_at IS NULL',
@@ -237,8 +233,7 @@ export default async function routes(app) {
   });
 
   app.post('/kids/:slug/awards', async (req, reply) => {
-    const { points, note, by, pin } = req.body || {};
-    if (!pinOk(pin)) return reply.status(403).send({ error: 'Wrong PIN' });
+    const { points, note, by } = req.body || {};
     const pts = Number(points);
     if (!Number.isInteger(pts) || pts < 1 || pts > 100) {
       return reply.status(400).send({ error: 'points must be a whole number from 1 to 100' });
@@ -260,9 +255,8 @@ export default async function routes(app) {
     return reply.status(201).send({ ...rows[0], stars: bal[0].total });
   });
 
-  // Undo a mistaken award. POST (not DELETE) so the PIN travels in the body.
+  // Undo a mistaken award.
   app.post('/awards/:id/remove', async (req, reply) => {
-    if (!pinOk((req.body || {}).pin)) return reply.status(403).send({ error: 'Wrong PIN' });
     if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return reply.status(404).send({ error: 'no such award' });
     const { rowCount } = await q('DELETE FROM kid_awards WHERE id = $1', [req.params.id]);
     if (!rowCount) return reply.status(404).send({ error: 'already removed' });

@@ -20,7 +20,6 @@
   // Reward claiming
   let claiming = $state(null); // reward being claimed
   let claimKid = $state('');
-  let claimPin = $state('');
   let claimError = $state('');
 
   // Bonus stars from a parent, with a note saying what for and who gave them
@@ -30,7 +29,6 @@
   let awardPoints = $state(1);
   let awardNote = $state('');
   let awardBy = $state(savedGiver());
-  let awardPin = $state('');
   let awardError = $state('');
   let awardBusy = $state(false);
   let awardList = $state([]);
@@ -48,7 +46,6 @@
     awardKid = kid;
     awardPoints = 1;
     awardNote = '';
-    awardPin = '';
     awardError = '';
     awardList = [];
     try {
@@ -63,14 +60,12 @@
     awardError = '';
     if (!awardNote.trim()) return (awardError = 'Add a note saying what it was for');
     if (!awardBy.trim()) return (awardError = 'Choose who is giving the stars');
-    if (!awardPin) return (awardError = 'Enter the parent PIN');
     awardBusy = true;
     try {
       const res = await api.post('/kids/' + awardKid.slug + '/awards', {
         points: awardPoints,
         note: awardNote.trim(),
-        by: awardBy.trim(),
-        pin: awardPin
+        by: awardBy.trim()
       });
       try {
         localStorage.setItem('awardBy', awardBy.trim());
@@ -88,10 +83,9 @@
   }
 
   async function removeAward(a) {
-    if (!awardPin) return (awardError = 'Enter the parent PIN first, then tap 🗑 again');
     if (!confirm('Remove +' + a.points + ' ⭐ "' + a.note + '"?')) return;
     try {
-      await api.post('/awards/' + a.id + '/remove', { pin: awardPin });
+      await api.post('/awards/' + a.id + '/remove');
       awardList = awardList.filter((x) => x.id !== a.id);
       const fresh = await api.get('/kids');
       kids = fresh;
@@ -177,15 +171,13 @@
   function openClaim(reward) {
     claiming = reward;
     claimKid = reward.kid_slug || (kids[0] && kids[0].slug) || '';
-    claimPin = '';
     claimError = '';
   }
 
   async function confirmClaim() {
     try {
       await api.post('/rewards/' + claiming.id + '/claim', {
-        kid_slug: claimKid,
-        pin: claimPin
+        kid_slug: claimKid
       });
       claiming = null;
       bigConfetti();
@@ -411,14 +403,6 @@
         {/each}
       </div>
 
-      <input
-        class="pin"
-        type="password"
-        inputmode="numeric"
-        placeholder="Parent PIN"
-        bind:value={claimPin}
-        onkeydown={(e) => e.key === 'Enter' && confirmClaim()}
-      />
       {#if claimError}<div class="claim-err">{claimError}</div>{/if}
       <button class="claim-go" onclick={confirmClaim}>Claim it! 🎉</button>
     </div>
@@ -479,14 +463,6 @@
         />
       </div>
 
-      <input
-        class="pin"
-        type="password"
-        inputmode="numeric"
-        placeholder="Parent PIN"
-        bind:value={awardPin}
-        onkeydown={(e) => e.key === 'Enter' && giveAward()}
-      />
       {#if awardError}<div class="claim-err">{awardError}</div>{/if}
       <button class="claim-go" disabled={awardBusy} onclick={giveAward}>
         {awardBusy ? 'Saving…' : 'Give ' + awardPoints + ' ⭐'}
@@ -927,17 +903,6 @@
     font-size: 13px;
     color: var(--text-muted);
     margin-top: 2px;
-  }
-  .pin {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    font-family: inherit;
-    font-size: 18px;
-    text-align: center;
-    letter-spacing: 6px;
-    -webkit-appearance: none;
   }
   .claim-err {
     color: #b91c1c;
