@@ -46,7 +46,6 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       INVITE_FROM: ${INVITE_FROM:-}
-      PARENT_PIN: ${PARENT_PIN:-290915}
     volumes:
       - ./photos:/photos:ro
       # Background photos uploaded from phones via http://192.168.10.6/photos

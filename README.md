@@ -139,14 +139,15 @@ curl -X PUT http://192.168.10.6/api/settings \
 | `background_mode` | `sky` | `sky`, `photo` or `slideshow` (set from `/photos`) |
 | `background_photo` / `background_mins` | — / 15 | Chosen photo; slideshow interval |
 
-`PARENT_PIN` (in `.env`, default `290915`) gates reward claims and bonus-star awards.
+There is no parent PIN: claiming a reward and awarding bonus stars are open to
+anyone at the screen. (A `PARENT_PIN` line left in an old `.env` is ignored.)
 
 ### Bonus stars
 
 On the **Kids** tab, **＋ Award** next to a child's stars opens a panel to give 1–10
 bonus stars with a note saying what they were for and who gave them (Mummy, Daddy or
-another name). It needs the parent PIN. Awards add to the same ⭐ balance rewards are
-claimed from, and the panel lists recent awards — 🗑 (with the PIN) removes a mistake.
+another name). Awards add to the same ⭐ balance rewards are
+claimed from, and the panel lists recent awards — 🗑 removes a mistake.
 They're stored in the `kid_awards` table, which the API creates on startup if missing.
 
 ## Local development
