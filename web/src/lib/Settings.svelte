@@ -2,6 +2,15 @@
   // Settings panel, opened from the ⚙️ button. Edits the school-run
   // settings stored on the Mini, so every screen (tablet and iPad) follows.
   import { api } from '../api.js';
+  import {
+    CELEBRATIONS,
+    TIMER_ALARMS,
+    play,
+    unlock,
+    kidSound,
+    timerSound,
+    soundsOn
+  } from '../sounds.js';
 
   let { settings = {}, onclose, onsaved } = $props();
 
@@ -23,8 +32,35 @@
   let start = $state(settings.morning_start || '07:00');
   // svelte-ignore state_referenced_locally
   let days = $state(settings.school_days || '12345');
+  // Plain copy, so the 20-second settings refresh can't reset choices.
+  // svelte-ignore state_referenced_locally
+  const opened = { ...settings };
+  let soundOn = $state(soundsOn(opened));
+  // svelte-ignore state_referenced_locally
+  let timerSnd = $state(timerSound(opened));
+  let kids = $state([]);
+  let kidSnds = $state({}); // slug -> celebration id
   let busy = $state(false);
   let error = $state('');
+
+  $effect(() => {
+    api
+      .get('/kids')
+      .then((k) => {
+        const picks = {};
+        k.forEach((kid) => (picks[kid.slug] = kidSound(opened, kid.slug)));
+        kidSnds = picks;
+        kids = k;
+      })
+      .catch(() => {
+        /* sound choices just won't show */
+      });
+  });
+
+  function test(id) {
+    unlock();
+    play(id);
+  }
 
   function toggleDay(n) {
     days = days.indexOf(n) === -1
@@ -48,7 +84,10 @@
       const saved = await api.put('/settings', {
         morning_leave: leave,
         morning_start: start,
-        school_days: days
+        school_days: days,
+        sounds_on: soundOn ? '1' : '0',
+        sound_timer: timerSnd,
+        ...Object.fromEntries(Object.keys(kidSnds).map((slug) => ['sound_' + slug, kidSnds[slug]]))
       });
       onsaved(saved);
       onclose();
@@ -101,10 +140,48 @@
       </div>
     </div>
 
+    <div class="section">🔊 Sounds</div>
+
+    <label class="toggle">
+      <input type="checkbox" bind:checked={soundOn} />
+      <span>Play sounds on this dashboard</span>
+    </label>
+
+    <div class="fld">
+      <span>Timer finished</span>
+      <div class="snd">
+        <select bind:value={timerSnd}>
+          {#each TIMER_ALARMS as a (a.id)}<option value={a.id}>{a.label}</option>{/each}
+        </select>
+        <button class="test" onclick={() => test(timerSnd)}>▶ Test</button>
+      </div>
+    </div>
+
+    {#each kids as kid (kid.slug)}
+      <div class="fld">
+        <span>{kid.name} finishes their jobs</span>
+        <div class="snd">
+          <select bind:value={kidSnds[kid.slug]}>
+            {#each CELEBRATIONS as c (c.id)}<option value={c.id}>{c.label}</option>{/each}
+          </select>
+          <button class="test" onclick={() => test(kidSnds[kid.slug])}>▶ Test</button>
+        </div>
+      </div>
+    {/each}
+
+    <div class="try">
+      <div class="try-title">Try them all</div>
+      <div class="try-grid">
+        {#each CELEBRATIONS.concat(TIMER_ALARMS) as c (c.id)}
+          <button class="try-btn" onclick={() => test(c.id)}>{c.label}</button>
+        {/each}
+      </div>
+    </div>
+
     {#if error}<div class="error">{error}</div>{/if}
 
     <button class="primary" disabled={busy} onclick={save}>{busy ? 'Saving…' : 'Save'}</button>
-    <p class="hint">Saved on the house server, so every screen uses the same times.</p>
+    <p class="hint">Saved on the house server, so every screen uses the same settings.</p>
   </div>
 </div>
 
@@ -189,6 +266,63 @@
     background: var(--header);
     border-color: var(--header);
     color: #fff;
+  }
+  .toggle {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-gap: 10px;
+    align-items: center;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 14px;
+  }
+  .toggle input {
+    width: 22px;
+    height: 22px;
+  }
+  .snd {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-gap: 8px;
+  }
+  .snd select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 16px;
+    background: #fff;
+  }
+  .test {
+    padding: 0 14px;
+    border-radius: 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .try {
+    margin-bottom: 14px;
+  }
+  .try-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .try-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-gap: 6px;
+  }
+  .try-btn {
+    padding: 9px 6px;
+    border-radius: 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    font-size: 13px;
+    text-align: left;
   }
   .error {
     background: #fee2e2;

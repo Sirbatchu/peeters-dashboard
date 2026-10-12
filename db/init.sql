@@ -62,7 +62,8 @@ CREATE TABLE kids (
   name        TEXT NOT NULL,
   colour      TEXT NOT NULL,
   emoji       TEXT NOT NULL DEFAULT '⭐',
-  sort_order  INT  NOT NULL DEFAULT 0
+  sort_order  INT  NOT NULL DEFAULT 0,
+  active      BOOLEAN NOT NULL DEFAULT TRUE  -- FALSE = hidden from the board
 );
 
 INSERT INTO kids (slug, name, colour, emoji, sort_order) VALUES
@@ -78,9 +79,12 @@ CREATE TABLE checklist_items (
   emoji       TEXT NOT NULL DEFAULT '✅',
   points      INT  NOT NULL DEFAULT 1,
   sort_order  INT  NOT NULL DEFAULT 0,
-  active      BOOLEAN NOT NULL DEFAULT TRUE
+  active      BOOLEAN NOT NULL DEFAULT TRUE,
+  routine     TEXT NOT NULL DEFAULT 'morning'  -- 'morning' | 'evening'
 );
 
+-- (The evening routine is added by the API on first start, so existing
+-- databases get it too.)
 INSERT INTO checklist_items (kid_slug, label, emoji, sort_order) VALUES
   (NULL, 'Eaten breakfast',              '🥣', 1),
   (NULL, 'Bowl/plate in the dishwasher', '🍽️', 2),

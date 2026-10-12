@@ -244,7 +244,7 @@
     {#if tab === 'calendar'}
       <Calendar bind:full />
     {:else if tab === 'kids'}
-      <Kids />
+      <Kids {settings} />
     {:else if tab === 'food'}
       <Food />
     {:else if tab === 'notes'}
