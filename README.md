@@ -142,6 +142,20 @@ curl -X PUT http://192.168.10.6/api/settings \
 There is no parent PIN: claiming a reward and awarding bonus stars are open to
 anyone at the screen. (A `PARENT_PIN` line left in an old `.env` is ignored.)
 
+### Prizes
+
+The **Saving up for** card lists prizes kids spend their stars on. They **reset every
+day**: each child can claim each prize once a day if they have enough stars (a ✓ with
+their emoji shows who's had it today). Claims are kept in the `reward_claims` table;
+the API creates it on startup, moves any claims from the old one-off scheme into it, and
+adds the Ice cream / breakfast / lunch / dinner-out prizes once.
+
+To change a prize's price (e.g. ice cream to 25):
+
+```bash
+docker compose -p peeters exec db psql -U peeters -c "UPDATE rewards SET cost = 25 WHERE label = 'Ice cream'"
+```
+
 ### Bonus stars
 
 On the **Kids** tab, **＋ Award** next to a child's stars opens a panel to give 1–10
