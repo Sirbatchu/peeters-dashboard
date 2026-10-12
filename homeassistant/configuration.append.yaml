@@ -13,6 +13,24 @@ emulated_hue:
     script.bedtime:
       name: Bedtime
       hidden: false
+    script.tidy_up_countdown:
+      name: Tidy up countdown
+      hidden: false
+    script.get_dressed_countdown:
+      name: Get dressed countdown
+      hidden: false
+    script.teeth_countdown:
+      name: Teeth countdown
+      hidden: false
+    script.maths_countdown:
+      name: Maths countdown
+      hidden: false
+    script.quiet_time_countdown:
+      name: Quiet time countdown
+      hidden: false
+    script.stop_countdown:
+      name: Stop countdown
+      hidden: false
 
 # The dashboard API does the work (dim screens, goodnight, music).
 rest_command:
@@ -21,3 +39,11 @@ rest_command:
     method: POST
     content_type: application/json
     payload: '{"source":"alexa"}'
+  # Kids board countdowns; chore is one of tidy, dressed, teeth, maths,
+  # quiet, stop (see scripts.yaml).
+  peeters_timer:
+    url: http://127.0.0.1/api/timer
+    method: POST
+    content_type: application/json
+    payload: '{"chore":"{{ chore }}"}'
+# ── end Peeters dashboard ──

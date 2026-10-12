@@ -10,6 +10,9 @@ import { configured, ha, speak, callService, deviceIdFor } from '../ha.js';
 
 const TZ = process.env.TZ || 'Europe/London';
 
+// Kids board timers Alexa can start (ids match CHORES in Kids.svelte).
+const TIMER_CHORES = ['tidy', 'dressed', 'teeth', 'maths', 'quiet', 'stop'];
+
 // ── Small helpers ──────────────────────────────────────────────
 
 async function getSettings() {
@@ -285,6 +288,19 @@ export default async function routes(app) {
 
   // Hit by Home Assistant's script.bedtime (voice) and the dashboard button.
   app.post('/bedtime', async (req) => runBedtime(req.log));
+
+  // "Alexa, maths time": an Alexa Routine turns on a Hue "light" that HA's
+  // emulated bridge maps to script.maths_countdown -> POST /api/timer
+  // {chore: 'maths'}. Screens poll settings and start that countdown on the
+  // Kids board ('stop' cancels it).
+  app.post('/timer', async (req, reply) => {
+    const chore = String(req.body?.chore || '');
+    if (!TIMER_CHORES.includes(chore)) {
+      return reply.status(400).send({ error: 'chore must be one of ' + TIMER_CHORES.join(', ') });
+    }
+    await setSetting('timer_command', JSON.stringify({ chore, at: Date.now() }));
+    return { timer: chore };
+  });
 
   app.post('/wake', async () => {
     await sendDim(0);

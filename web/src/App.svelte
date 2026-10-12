@@ -50,6 +50,7 @@
     try {
       settings = await api.get('/settings');
       applyRemoteDim(settings);
+      applyRemoteTimer(settings);
     } catch (e) {
       /* defaults below cover it */
     }
@@ -88,6 +89,43 @@
     // e.g. a tablet switched on in the afternoon after last night's bedtime.
     if (firstEver && Date.now() - cmd.at > 10 * 60 * 1000) return;
     setDim(cmd.state === 1);
+  }
+
+  // "Alexa, maths time" writes settings.timer_command = {chore, at}. Each
+  // screen starts it once, jumping to the Kids board and waking from dim.
+  // Commands more than 3 minutes old are ignored (screen was off/asleep).
+  let timerRequest = $state(null);
+  let lastTimerCmd = storedNum('timerCmdAt');
+
+  function storedNum(key) {
+    try {
+      return Number(localStorage.getItem(key)) || 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function applyRemoteTimer(s) {
+    if (!s || !s.timer_command) return;
+    var cmd;
+    try {
+      cmd = JSON.parse(s.timer_command);
+    } catch (e) {
+      return;
+    }
+    if (!cmd || !cmd.at || cmd.at <= lastTimerCmd) return;
+    lastTimerCmd = cmd.at;
+    try {
+      localStorage.setItem('timerCmdAt', String(cmd.at));
+    } catch (e) {
+      /* private mode: the in-memory copy still stops repeats */
+    }
+    if (Date.now() - cmd.at > 3 * 60 * 1000) return;
+    if (cmd.chore !== 'stop') {
+      tab = 'kids';
+      setDim(false);
+    }
+    timerRequest = cmd;
   }
 
   function minsOf(hhmm, fallback) {
@@ -143,9 +181,10 @@
     loadSettings();
     const iv = setInterval(heartbeat, 30000);
     const clock = setInterval(() => (now = new Date()), 1000);
-    // Every 20s so "Alexa, bedtime" dims the screens promptly (and a
-    // background picked on a phone shows up quickly). It's one tiny request.
-    const st = setInterval(loadSettings, 20 * 1000);
+    // Every 5s so voice commands ("Alexa, bedtime", "Alexa, maths time")
+    // land promptly, and a background picked on a phone shows up quickly.
+    // It's one tiny request on the LAN.
+    const st = setInterval(loadSettings, 5 * 1000);
 
     // Keep the wall tablet's screen on. Wake Lock is Android Chrome over
     // HTTPS only (the iPad uses Auto-Lock: Never instead), and the browser
@@ -244,7 +283,7 @@
     {#if tab === 'calendar'}
       <Calendar bind:full />
     {:else if tab === 'kids'}
-      <Kids {settings} />
+      <Kids {settings} {timerRequest} ontimerhandled={() => (timerRequest = null)} />
     {:else if tab === 'food'}
       <Food />
     {:else if tab === 'notes'}
