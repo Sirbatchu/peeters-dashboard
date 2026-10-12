@@ -159,8 +159,9 @@ docker compose -p peeters exec db psql -U peeters -c "UPDATE kids SET active = T
 
 ### Pictures and sounds
 
-Each child's ring shows their emoji from the `kids` table; 🤖 is drawn as a dancing robot
-(Malachi) and ⚡ as Pikachu (Atticus) — see `web/src/lib/Avatar.svelte`.
+Each child's ring shows their emoji from the `kids` table; ⚡ is drawn as an animated
+Pikachu (Malachi), 🦊 as Eevee (Atticus) and 🤖 as a dancing robot — see
+`web/src/lib/Avatar.svelte`.
 
 Finishing a morning or evening list plays that child's celebration tune, and a
 **Beat the clock** timer plays an alarm when it runs out. Tunes are synthesised in the

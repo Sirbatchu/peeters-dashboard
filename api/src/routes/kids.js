@@ -190,6 +190,11 @@ export default async function routes(app) {
     q(`UPDATE kids SET emoji = CASE slug WHEN 'malachi' THEN '🤖' ELSE '⚡' END
         WHERE slug IN ('malachi', 'atticus')`)
   );
+  // The boys swapped: Malachi is Pikachu (⚡), Atticus is Eevee (🦊).
+  await once('avatars_v2', () =>
+    q(`UPDATE kids SET emoji = CASE slug WHEN 'malachi' THEN '⚡' ELSE '🦊' END
+        WHERE slug IN ('malachi', 'atticus')`)
+  );
 
   // Everything the kids' board needs, in one request.
   app.get('/kids', async () => {
