@@ -1,11 +1,15 @@
 import { q, today } from '../db.js';
 
-/** Items that apply to a kid: shared items (kid_slug NULL) plus their own. */
+/**
+ * Items that apply to a kid: shared items (kid_slug NULL) plus their own.
+ * routine is 'morning' or 'evening'; the board shows whichever fits the
+ * time of day, but a day only counts as complete when both are done.
+ */
 const ITEMS_SQL = `
-  SELECT id, label, emoji, points, sort_order
+  SELECT id, label, emoji, points, sort_order, routine
     FROM checklist_items
    WHERE active AND (kid_slug IS NULL OR kid_slug = $1)
-   ORDER BY sort_order, label`;
+   ORDER BY routine = 'evening', sort_order, label`;
 
 // Balance = stars earned from checklists + stars awarded by a parent
 // - stars spent on claimed rewards.
@@ -17,11 +21,30 @@ const BALANCE_SQL = `
 // Prizes the family can claim again every day, added after launch.
 // Seeded once (tracked in settings) so a prize deleted later isn't re-added.
 const EXTRA_REWARDS = [
-  ['Ice cream', '🍦', 20],
+  ['Ice cream', '🍦', 15],
   ['Go out for breakfast', '🥞', 40],
   ['Go out for lunch', '🍔', 50],
   ['Go out for dinner', '🍝', 60]
 ];
+
+// Evening routine, added after launch (seeded once, like EXTRA_REWARDS).
+const EVENING_ITEMS = [
+  ['Help set the table', '🍴'],
+  ['Take my plate to the kitchen', '🍽️'],
+  ['Help tidy the table', '🧽'],
+  ['Tidy up all toys', '🧸'],
+  ['Do all homework', '📝'],
+  ['Shower and clean behind ears', '🚿'],
+  ['Brush teeth', '🪥']
+];
+
+/** Run a one-off data change once, remembered by a settings key. */
+async function once(key, fn) {
+  const { rowCount } = await q('SELECT 1 FROM settings WHERE key = $1', [key]);
+  if (rowCount) return;
+  await fn();
+  await q("INSERT INTO settings (key, value) VALUES ($1, '1') ON CONFLICT (key) DO NOTHING", [key]);
+}
 
 async function stateFor(slug, day) {
   const [{ rows: items }, { rows: ticks }] = await Promise.all([
@@ -138,10 +161,34 @@ export default async function routes(app) {
     );
   }
 
+  // Morning / evening routines.
+  await q("ALTER TABLE checklist_items ADD COLUMN IF NOT EXISTS routine TEXT NOT NULL DEFAULT 'morning'");
+  await once('evening_seeded_v1', async () => {
+    for (const [i, [label, emoji]] of EVENING_ITEMS.entries()) {
+      await q(
+        `INSERT INTO checklist_items (label, emoji, sort_order, routine)
+         SELECT $1::text, $2::text, $3::int, 'evening'
+          WHERE NOT EXISTS (SELECT 1 FROM checklist_items
+                             WHERE label = $1::text AND routine = 'evening' AND active)`,
+        [label, emoji, i + 1]
+      );
+    }
+  });
+
+  // Ice cream was 20 stars at launch; the family asked for 15. Only moves
+  // it if nobody has changed the price by hand since.
+  await once('ice_cream_15', () =>
+    q("UPDATE rewards SET cost = 15 WHERE label = 'Ice cream' AND cost = 20")
+  );
+
+  // Kids can be hidden from the board without losing their stars or history.
+  await q('ALTER TABLE kids ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE');
+  await once('waverly_hidden_v1', () => q("UPDATE kids SET active = FALSE WHERE slug = 'waverly'"));
+
   // Everything the kids' board needs, in one request.
   app.get('/kids', async () => {
     const day = today();
-    const { rows: kids } = await q('SELECT * FROM kids ORDER BY sort_order, name');
+    const { rows: kids } = await q('SELECT * FROM kids WHERE active ORDER BY sort_order, name');
 
     return Promise.all(
       kids.map(async (kid) => {
@@ -203,18 +250,18 @@ export default async function routes(app) {
   // ── Checklist item management (editable without a deploy) ──
   app.get('/checklist-items', async () => {
     const { rows } = await q(
-      'SELECT * FROM checklist_items ORDER BY sort_order, label'
+      "SELECT * FROM checklist_items ORDER BY routine = 'evening', sort_order, label"
     );
     return rows;
   });
 
   app.post('/checklist-items', async (req, reply) => {
-    const { label, emoji, kid_slug, points, sort_order } = req.body || {};
+    const { label, emoji, kid_slug, points, sort_order, routine } = req.body || {};
     if (!label) return reply.status(400).send({ error: 'label required' });
     const { rows } = await q(
-      `INSERT INTO checklist_items (label, emoji, kid_slug, points, sort_order)
-       VALUES ($1, COALESCE($2,'✅'), $3, COALESCE($4,1), COALESCE($5,99)) RETURNING *`,
-      [label, emoji, kid_slug || null, points, sort_order]
+      `INSERT INTO checklist_items (label, emoji, kid_slug, points, sort_order, routine)
+       VALUES ($1, COALESCE($2,'✅'), $3, COALESCE($4,1), COALESCE($5,99), $6) RETURNING *`,
+      [label, emoji, kid_slug || null, points, sort_order, routine === 'evening' ? 'evening' : 'morning']
     );
     return reply.status(201).send(rows[0]);
   });

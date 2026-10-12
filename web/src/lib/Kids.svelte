@@ -7,11 +7,36 @@
   let celebrating = $state(null); // kid slug mid-celebration
   let error = $state('');
 
+  // Morning jobs show until 10:00, evening jobs from 17:00; in between the
+  // board just shows how the morning went.
+  const MORNING_END = 10 * 60;
+  const EVENING_START = 17 * 60;
+  let nowMins = $state(minsNow());
+  let routine = $derived(
+    nowMins < MORNING_END ? 'morning' : nowMins >= EVENING_START ? 'evening' : ''
+  );
+
+  function minsNow() {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
+  }
+
+  // The items, and progress, for one routine.
+  function itemsFor(kid, which) {
+    return (kid.items || []).filter((i) => i.routine === which);
+  }
+  function progress(kid, which) {
+    const items = itemsFor(kid, which);
+    const done = items.filter((i) => i.done).length;
+    return { done, total: items.length, complete: items.length > 0 && done === items.length };
+  }
+
   // Chore timer
   const CHORES = [
     { label: 'Tidy-up race', emoji: '🧸', mins: 10 },
     { label: 'Get dressed', emoji: '👕', mins: 5 },
     { label: 'Teeth', emoji: '🪥', mins: 2 },
+    { label: 'Maths', emoji: '➗', mins: 3 },
     { label: 'Quiet time', emoji: '📚', mins: 20 }
   ];
   let timer = $state(null); // {label, emoji, total, left}
@@ -205,13 +230,16 @@
   $effect(() => {
     load();
     const iv = setInterval(load, 60 * 1000);
-    return () => clearInterval(iv);
+    const clock = setInterval(() => (nowMins = minsNow()), 20 * 1000);
+    return () => {
+      clearInterval(iv);
+      clearInterval(clock);
+    };
   });
 
   async function tick(kid, item, evt) {
     // Optimistic flip so the tap feels instant on old hardware.
     item.done = !item.done;
-    kid.done += item.done ? 1 : -1;
 
     if (item.done) confettiAt(evt.clientX, evt.clientY);
 
@@ -222,7 +250,8 @@
       kid.total = fresh.total;
       kid.complete = fresh.complete;
       kid.streak = fresh.streak;
-      if (fresh.complete && fresh.justTicked) {
+      // Celebrate finishing this routine (the morning or the evening).
+      if (fresh.justTicked && progress(kid, item.routine).complete) {
         celebrating = kid.slug;
         bigConfetti();
         setTimeout(() => (celebrating = null), 3500);
@@ -273,9 +302,10 @@
 
 <div class="board" class:three={kids.length >= 3}>
   {#each kids as kid (kid.slug)}
+    {@const p = progress(kid, routine || 'morning')}
     <div class="card kid" style="border-top: 6px solid {kid.colour}">
       <div class="kid-head">
-        <div class="ring-wrap" class:pulse={kid.complete}>
+        <div class="ring-wrap" class:pulse={p.complete}>
           <svg viewBox="0 0 72 72" class="ring">
             <circle cx="36" cy="36" r="31" fill="rgba(255,255,255,.6)" stroke="var(--border)" stroke-width="5" />
             <circle
@@ -287,7 +317,7 @@
               stroke-width="5"
               stroke-linecap="round"
               stroke-dasharray="194.8"
-              stroke-dashoffset={194.8 * (1 - (kid.total ? kid.done / kid.total : 0))}
+              stroke-dashoffset={194.8 * (1 - (p.total ? p.done / p.total : 0))}
               transform="rotate(-90 36 36)"
               style="-webkit-transition: stroke-dashoffset .5s ease; transition: stroke-dashoffset .5s ease"
             />
@@ -302,23 +332,31 @@
             {#if kid.streak > 1}<span class="stat streak">🔥 {kid.streak} day streak</span>{/if}
           </div>
         </div>
-        <div class="progress" class:full={kid.complete}>
-          {kid.done}<span class="of">/{kid.total}</span>
+        <div class="progress" class:full={p.complete}>
+          {p.done}<span class="of">/{p.total}</span>
         </div>
       </div>
 
-      {#each kid.items as item (item.id)}
-        <button class="item" class:done={item.done} onclick={(e) => tick(kid, item, e)}>
-          <span class="box">{item.done ? '✓' : ''}</span>
-          <span class="item-emoji">{item.emoji}</span>
-          <span class="label">{item.label}</span>
-        </button>
-      {/each}
+      {#if routine}
+        <div class="routine-title">{routine === 'morning' ? '☀️ Morning jobs' : '🌙 Evening jobs'}</div>
+        {#each itemsFor(kid, routine) as item (item.id)}
+          <button class="item" class:done={item.done} onclick={(e) => tick(kid, item, e)}>
+            <span class="box">{item.done ? '✓' : ''}</span>
+            <span class="item-emoji">{item.emoji}</span>
+            <span class="label">{item.label}</span>
+          </button>
+        {/each}
+      {:else}
+        <div class="between">
+          <div>☀️ Morning jobs: {p.done} of {p.total} done</div>
+          <div class="between-next">🌙 Evening jobs start at 5pm</div>
+        </div>
+      {/if}
 
       {#if celebrating === kid.slug}
-        <div class="congrats">🎉 Amazing job today, {kid.name}!</div>
-      {:else if kid.complete}
-        <div class="congrats subtle">🌟 All done today!</div>
+        <div class="congrats">🎉 Amazing job, {kid.name}!</div>
+      {:else if routine && p.complete}
+        <div class="congrats subtle">🌟 All done {routine === 'morning' ? 'this morning' : 'tonight'}!</div>
       {/if}
 
       <!-- 14-day star history -->
@@ -601,6 +639,26 @@
   .progress.full {
     color: #16a34a;
   }
+  .routine-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .between {
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 14px 12px;
+    font-size: 16px;
+    font-weight: 600;
+    text-align: center;
+  }
+  .between-next {
+    margin-top: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-muted);
+  }
   .item {
     display: grid;
     grid-template-columns: auto auto 1fr;
@@ -681,7 +739,7 @@
       padding: 11px;
     }
     .t-grid {
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(3, 1fr);
     }
     .rewards-grid {
       grid-template-columns: repeat(3, 1fr);
@@ -795,12 +853,12 @@
   }
   .t-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     grid-gap: 10px;
   }
   @media (max-width: 700px) {
     .t-grid {
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: repeat(3, 1fr);
     }
   }
   .t-preset {
