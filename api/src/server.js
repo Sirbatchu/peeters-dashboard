@@ -7,6 +7,7 @@ import household from './routes/household.js';
 import misc from './routes/misc.js';
 import backgrounds from './routes/backgrounds.js';
 import alexa from './routes/alexa.js';
+import reminders from './routes/reminders.js';
 
 const app = Fastify({
   logger: { level: process.env.LOG_LEVEL || 'info' }
@@ -31,6 +32,7 @@ app.register(kids, { prefix: '/api' });
 app.register(home, { prefix: '/api' });
 app.register(household, { prefix: '/api' });
 app.register(backgrounds, { prefix: '/api' });
+app.register(reminders, { prefix: '/api' });
 app.register(alexa, { prefix: '/api' });
 
 app.setErrorHandler((err, req, reply) => {

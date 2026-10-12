@@ -238,6 +238,13 @@ const ALARMS = {
   }
 };
 
+// ── Short game effects ──
+const SFX = {
+  right: { bpm: 600, voices: [{ wave: 'sine', vol: 0.25, ring: 0.3, notes: [['E6', 1], ['A6', 2]] }] },
+  wrong: { bpm: 300, voices: [{ wave: 'square', vol: 0.07, legato: 0.9, notes: [['E3', 1], ['C3', 2]] }] },
+  go: { bpm: 400, voices: [{ wave: 'square', vol: 0.1, legato: 0.8, notes: [['C5', 1], ['r', 1], ['C5', 1], ['r', 1], ['G5', 3]] }] }
+};
+
 export const CELEBRATIONS = Object.keys(TUNES).map((id) => ({ id, label: TUNES[id].label }));
 export const TIMER_ALARMS = Object.keys(ALARMS).map((id) => ({ id, label: ALARMS[id].label }));
 
@@ -261,7 +268,7 @@ export function soundsOn(settings) {
 /** Play a celebration or alarm by id. Never throws: sound is a nice-to-have. */
 export function play(id) {
   try {
-    const tune = TUNES[id] || ALARMS[id];
+    const tune = TUNES[id] || ALARMS[id] || SFX[id];
     return tune ? playTune(tune) : 0;
   } catch (e) {
     return 0;

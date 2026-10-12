@@ -130,6 +130,20 @@ CREATE TABLE kid_awards (
 );
 CREATE INDEX kid_awards_kid_idx ON kid_awards (kid_slug, created_at DESC);
 
+-- Times-tables game rounds. Stars a round earns are also written to
+-- kid_awards (awarded_by 'Times tables'), so they count in the balance.
+CREATE TABLE tables_rounds (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kid_slug   TEXT NOT NULL REFERENCES kids(slug) ON DELETE CASCADE,
+  day        DATE NOT NULL,
+  correct    INT  NOT NULL,
+  wrong      INT  NOT NULL,
+  tables     TEXT NOT NULL,
+  stars      INT  NOT NULL DEFAULT 0,
+  played_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX tables_rounds_kid_idx ON tables_rounds (kid_slug, day DESC);
+
 -- Things kids are saving their stars up for. Claiming spends stars:
 -- balance = SUM(kid_days.points) + SUM(kid_awards.points)
 --         - SUM(reward_claims.cost).
@@ -245,3 +259,21 @@ INSERT INTO settings (key, value) VALUES
   ('bedtime_command',  'play relaxing sleep music'),
   ('bedtime_message',  'Goodnight everyone. Time to wind down.'),
   ('dim_command',      '');
+
+-- Recurring reminders (bins, PE kit...): a weekday, every week or every
+-- other week (anchor = a date it falls on). The API creates this on startup
+-- for older databases and seeds the bins once.
+CREATE TABLE reminders (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  label       TEXT NOT NULL,
+  emoji       TEXT NOT NULL DEFAULT '🔔',
+  weekday     INT  NOT NULL CHECK (weekday BETWEEN 1 AND 7),
+  every_weeks INT  NOT NULL DEFAULT 1 CHECK (every_weeks IN (1, 2)),
+  anchor      DATE,
+  active      BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO settings (key, value) VALUES
+  ('reminder_enabled', '1'),
+  ('reminder_time',    '18:00'),  -- spoken the evening before
+  ('reminder_last',    '');

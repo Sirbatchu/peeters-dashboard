@@ -7,6 +7,7 @@
 import { q, today } from '../db.js';
 import { eventsBetween } from './events.js';
 import { configured, ha, speak, callService, deviceIdFor } from '../ha.js';
+import { remindersOn, remindersNow, sayList, addDays } from './reminders.js';
 
 const TZ = process.env.TZ || 'Europe/London';
 
@@ -176,6 +177,9 @@ export async function composeBriefing() {
     out.push(`Leave for school at ${sayClock(s.morning_leave)}.`);
   }
 
+  const todays = await remindersOn(today());
+  if (todays.length) out.push(`Don't forget, today: ${sayList(todays)}.`);
+
   out.push('Have a great day!');
   return out.join(' ');
 }
@@ -238,6 +242,39 @@ async function tick(log) {
   ticking = true;
   try {
     const s = await getSettings();
+    await briefingTick(s, log);
+    await reminderTick(s, log);
+  } finally {
+    ticking = false;
+  }
+}
+
+/**
+ * The evening before a reminder (bins, PE kit...), say it on the briefing
+ * Echo at reminder_time (default 18:00). Same 15-minute window and
+ * claim-first guard as the briefing.
+ */
+async function reminderTick(s, log) {
+  try {
+    if (s.reminder_enabled === '0') return;
+    const due = toMins(s.reminder_time || '18:00');
+    const now = toMins(nowLocal().hm);
+    if (due === null || now < due || now > due + 15) return;
+    const day = today();
+    if (s.reminder_last === day) return;
+    const tomorrow = await remindersOn(addDays(day, 1));
+    await setSetting('reminder_last', day);
+    if (!tomorrow.length) return;
+    const entity = s.reminder_target || s.briefing_target || 'notify.kitchen_speak';
+    await speak(entity, `Reminder for tomorrow: ${sayList(tomorrow)}.`);
+    log.info(`reminders sent to ${entity}`);
+  } catch (err) {
+    log.warn(`reminders failed: ${err.message}`);
+  }
+}
+
+async function briefingTick(s, log) {
+  try {
     if (s.briefing_enabled !== '1') return;
     const { hm, iso } = nowLocal();
     if (!(s.briefing_days || '12345').includes(String(iso))) return;
@@ -253,8 +290,6 @@ async function tick(log) {
     log.info(`briefing sent to ${r.target}`);
   } catch (err) {
     log.warn(`briefing failed: ${err.message}`);
-  } finally {
-    ticking = false;
   }
 }
 
@@ -311,16 +346,18 @@ export default async function routes(app) {
   app.get('/upcoming', async () => {
     const now = new Date();
     const horizon = new Date(now.getTime() + 14 * 864e5);
-    const [evs, bdays, notes] = await Promise.all([
+    const [evs, bdays, notes, reminders] = await Promise.all([
       eventsBetween(now.toISOString(), horizon.toISOString()),
       upcomingBirthdays(30),
       q(
         `SELECT n.id, n.body, n.author, c.label AS author_label, c.colour
            FROM notes n LEFT JOIN calendars c ON c.slug = n.author
           WHERE n.pinned ORDER BY n.created_at DESC LIMIT 3`
-      )
+      ),
+      remindersNow()
     ]);
     return {
+      reminders,
       events: evs
         .filter((e) => new Date(e.ends_at) >= now)
         .slice(0, 4)

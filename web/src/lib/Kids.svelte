@@ -3,6 +3,7 @@
   import { api } from '../api.js';
   import { play, unlock, kidSound, timerSound, soundsOn } from '../sounds.js';
   import Avatar from './Avatar.svelte';
+  import TablesGame from './TablesGame.svelte';
 
   // timerRequest: {chore, at} from Alexa (via App); ontimerhandled clears it.
   let { settings = {}, timerRequest = null, ontimerhandled } = $props();
@@ -47,6 +48,14 @@
   ];
   let timer = $state(null); // {label, emoji, total, left}
   let timerHandle = null;
+
+  // Times-tables game, open for one kid
+  let tablesKid = $state(null);
+
+  function tablesDone(res) {
+    kids = kids.map((k) => (k.slug === tablesKid.slug ? { ...k, stars: res.balance } : k));
+    if (res.stars || res.new_best) bigConfetti();
+  }
 
   // Reward claiming
   let claiming = $state(null); // reward being claimed
@@ -357,6 +366,7 @@
           <div class="kid-stats">
             <span class="stat stars">⭐ {kid.stars}</span>
             <button class="stat award-btn" onclick={() => openAward(kid)}>＋ Award</button>
+            <button class="stat tables-btn" onclick={() => (tablesKid = kid)}>🧮 Tables</button>
             {#if kid.streak > 1}<span class="stat streak">🔥 {kid.streak} day streak</span>{/if}
           </div>
         </div>
@@ -497,6 +507,10 @@
       </button>
     </div>
   </div>
+{/if}
+
+{#if tablesKid}
+  <TablesGame kid={tablesKid} {settings} onclose={() => (tablesKid = null)} ondone={tablesDone} />
 {/if}
 
 {#if awardKid}
@@ -1042,6 +1056,11 @@
   .stat.award-btn {
     background: var(--header);
     color: #fff;
+    cursor: pointer;
+  }
+  .stat.tables-btn {
+    background: #ede9fe;
+    color: #6d28d9;
     cursor: pointer;
   }
   .modal.award {

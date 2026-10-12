@@ -103,6 +103,15 @@ in the `calendars` table (`sort_order` sets the chip order) — no code change n
 Tap the **pencil** next to an event in the day view to edit it. Editing one
 occurrence of a repeating event changes the whole series.
 
+## Reminders
+
+Recurring reminders — bins, PE kit, swimming bag — live under ⚙️ **Settings → Reminders**
+(each falls on a weekday, every week or every other week). They show as a chip on the
+**Next up** strip from midday the day before until midday on the day, Alexa says them the
+evening before (`reminder_time`, default 18:00, on the briefing Echo) and again in the
+morning briefing. Bins come pre-set: recycling every Monday, refuse every other Monday
+(12 Oct 2026 was a refuse week).
+
 ## Dimming
 
 There is no automatic bedtime dim. Tap **🌙** (end of the tab row, or **🌙 Dim** in the
@@ -187,6 +196,15 @@ Then say "Alexa, discover devices", and in the Alexa app add a **Routine** per t
 natural phrase — When: *Voice* "maths time" → Action: *Smart Home* → Maths countdown →
 *Power on* (optionally *Alexa says* "Three minutes of maths, go!"). Avoid the word "timer"
 in phrases, or Alexa sets one of its own timers instead.
+
+### Times tables
+
+**🧮 Tables** on a child's card opens a 60-second quick-fire round with a big number pad;
+answers check themselves once enough digits are typed, and misses come back later in the
+round. Pick which tables (1–12) before starting — remembered per child in
+`settings.tables_<kid>`. Every 5 right earns ⭐ (up to 5 ⭐ a day from the game, worked out
+by the API); those stars land in `kid_awards` as "Times tables", so they show in the award
+history and can be removed. Rounds are kept in `tables_rounds` for personal bests.
 
 ### Prizes
 
