@@ -4,3 +4,59 @@ bedtime:
   mode: single
   sequence:
     - action: rest_command.peeters_bedtime
+
+# Kids board countdowns ("Alexa, maths time" via an Alexa Routine).
+
+tidy_up_countdown:
+  alias: Tidy up countdown
+  icon: mdi:toy-brick
+  mode: single
+  sequence:
+    - action: rest_command.peeters_timer
+      data:
+        chore: tidy
+
+get_dressed_countdown:
+  alias: Get dressed countdown
+  icon: mdi:tshirt-crew
+  mode: single
+  sequence:
+    - action: rest_command.peeters_timer
+      data:
+        chore: dressed
+
+teeth_countdown:
+  alias: Teeth countdown
+  icon: mdi:toothbrush
+  mode: single
+  sequence:
+    - action: rest_command.peeters_timer
+      data:
+        chore: teeth
+
+maths_countdown:
+  alias: Maths countdown
+  icon: mdi:calculator
+  mode: single
+  sequence:
+    - action: rest_command.peeters_timer
+      data:
+        chore: maths
+
+quiet_time_countdown:
+  alias: Quiet time countdown
+  icon: mdi:book-open-variant
+  mode: single
+  sequence:
+    - action: rest_command.peeters_timer
+      data:
+        chore: quiet
+
+stop_countdown:
+  alias: Stop countdown
+  icon: mdi:timer-off
+  mode: single
+  sequence:
+    - action: rest_command.peeters_timer
+      data:
+        chore: stop

@@ -1,6 +1,7 @@
 <script>
   // A kid's picture in the progress ring. Some emojis have an animated
-  // version (🤖 a dancing robot, ⚡ Pikachu); anything else shows as-is.
+  // version (🤖 a dancing robot, ⚡ Pikachu, 🦊 Eevee); anything else
+  // shows as-is.
   // Change a kid's emoji in the kids table to switch.
   let { emoji = '⭐', size = 52 } = $props();
 </script>
@@ -72,6 +73,47 @@
       <circle class="pk-cheek" cx="44.5" cy="39" r="3.8" fill="#ef4444" />
       <path class="pk-zap pk-zap-l" d="M12 34 L9 38 L12 38 L8 44" stroke="#f59e0b" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" />
       <path class="pk-zap pk-zap-r" d="M52 34 L55 38 L52 38 L56 44" stroke="#f59e0b" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+    </g>
+  </svg>
+{:else if emoji === '🦊'}
+  <svg class="av eevee" viewBox="0 0 64 64" width={size} height={size} aria-label="Eevee">
+    <g class="ev-sway">
+      <g class="ev-tail">
+        <path
+          d="M45 50 Q56 48 59 38 Q60 30 55 26 Q56 34 50 38 Q46 41 43 46 Z"
+          fill="#b8763a"
+          stroke="#7c4a1e"
+          stroke-width="1.2"
+          stroke-linejoin="round"
+        />
+        <path d="M55 26 Q60 30 59 38 Q57 34 53 33 Q56 30 55 26 Z" fill="#fdf3dc" />
+      </g>
+      <g class="ev-ear ev-ear-l">
+        <path d="M23 27 Q9 18 6 2 Q19 6 29 21 Z" fill="#b8763a" stroke="#7c4a1e" stroke-width="1.2" stroke-linejoin="round" />
+        <path d="M21 23 Q12 16 10 7 Q18 11 25 20 Z" fill="#6b3e1f" />
+      </g>
+      <g class="ev-ear ev-ear-r">
+        <path d="M41 27 Q55 18 58 2 Q45 6 35 21 Z" fill="#b8763a" stroke="#7c4a1e" stroke-width="1.2" stroke-linejoin="round" />
+        <path d="M43 23 Q52 16 54 7 Q46 11 39 20 Z" fill="#6b3e1f" />
+      </g>
+      <path
+        class="ev-mane"
+        d="M17 43 Q12 53 21 55 Q22 61 29 58 Q32 63 35 58 Q42 61 43 55 Q52 53 47 43 Z"
+        fill="#fdf3dc"
+        stroke="#d6b98a"
+        stroke-width="1.2"
+        stroke-linejoin="round"
+      />
+      <ellipse cx="32" cy="36" rx="15.5" ry="13.5" fill="#b8763a" stroke="#7c4a1e" stroke-width="1.2" />
+      <path d="M28 24 Q32 21 36 24 Q32 26 28 24 Z" fill="#9a5f2c" />
+      <g class="ev-eyes">
+        <circle cx="25.5" cy="35" r="3.6" fill="#3b1f0e" />
+        <circle cx="38.5" cy="35" r="3.6" fill="#3b1f0e" />
+        <circle cx="26.7" cy="33.6" r="1.3" fill="#fff" />
+        <circle cx="39.7" cy="33.6" r="1.3" fill="#fff" />
+      </g>
+      <ellipse cx="32" cy="39.6" rx="1.2" ry="0.8" fill="#3b1f0e" />
+      <path d="M29.5 41.5 Q31 43.2 32 41.5 Q33 43.2 34.5 41.5" stroke="#3b1f0e" stroke-width="1.2" fill="none" stroke-linecap="round" />
     </g>
   </svg>
 {:else}
@@ -251,6 +293,46 @@
   @keyframes pk-zap {
     0%, 30%, 100% { opacity: 0; }
     10%, 20% { opacity: 1; }
+  }
+
+  /* ── Eevee: tilts its head, flicks its ears, wags its fluffy tail ── */
+  .ev-sway {
+    -webkit-transform-origin: 32px 56px;
+    transform-origin: 32px 56px;
+    -webkit-animation: ev-sway 3s ease-in-out infinite;
+    animation: ev-sway 3s ease-in-out infinite;
+  }
+  .ev-tail {
+    -webkit-transform-origin: 45px 50px;
+    transform-origin: 45px 50px;
+    -webkit-animation: pk-wag 0.7s ease-in-out infinite alternate;
+    animation: pk-wag 0.7s ease-in-out infinite alternate;
+  }
+  .ev-ear-l {
+    -webkit-transform-origin: 26px 24px;
+    transform-origin: 26px 24px;
+    -webkit-animation: pk-ear-l 2.8s ease-in-out infinite;
+    animation: pk-ear-l 2.8s ease-in-out infinite;
+  }
+  .ev-ear-r {
+    -webkit-transform-origin: 38px 24px;
+    transform-origin: 38px 24px;
+    -webkit-animation: pk-ear-r 2.8s ease-in-out 1.2s infinite;
+    animation: pk-ear-r 2.8s ease-in-out 1.2s infinite;
+  }
+  .ev-eyes {
+    -webkit-transform-origin: 32px 35px;
+    transform-origin: 32px 35px;
+    -webkit-animation: blink 3.8s infinite;
+    animation: blink 3.8s infinite;
+  }
+  @-webkit-keyframes ev-sway {
+    0%, 100% { -webkit-transform: rotate(-6deg); }
+    50% { -webkit-transform: rotate(6deg) translateY(-1px); }
+  }
+  @keyframes ev-sway {
+    0%, 100% { transform: rotate(-6deg); }
+    50% { transform: rotate(6deg) translateY(-1px); }
   }
 
   @-webkit-keyframes blink {

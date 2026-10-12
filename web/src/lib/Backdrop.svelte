@@ -12,6 +12,9 @@
   let index = $state(0);
 
   let mode = $derived(settings.background_mode || 'sky');
+  // Derived so the effect below only restarts when the number changes, not
+  // every time the screen re-polls settings (a new object each time).
+  let mins = $derived(Number(settings.background_mins) || 15);
 
   $effect(() => {
     if (mode !== 'slideshow') return;
@@ -25,7 +28,6 @@
         .catch(function () {});
     };
     load();
-    var mins = Number(settings.background_mins) || 15;
     var next = setInterval(function () {
       if (photos.length) index = (index + 1) % photos.length;
     }, mins * 60 * 1000);

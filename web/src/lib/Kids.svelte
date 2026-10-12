@@ -1,9 +1,11 @@
 <script>
+  import { untrack } from 'svelte';
   import { api } from '../api.js';
   import { play, unlock, kidSound, timerSound, soundsOn } from '../sounds.js';
   import Avatar from './Avatar.svelte';
 
-  let { settings = {} } = $props();
+  // timerRequest: {chore, at} from Alexa (via App); ontimerhandled clears it.
+  let { settings = {}, timerRequest = null, ontimerhandled } = $props();
 
   let kids = $state([]);
   let rewards = $state([]);
@@ -37,11 +39,11 @@
 
   // Chore timer
   const CHORES = [
-    { label: 'Tidy-up race', emoji: '🧸', mins: 10 },
-    { label: 'Get dressed', emoji: '👕', mins: 5 },
-    { label: 'Teeth', emoji: '🪥', mins: 2 },
-    { label: 'Maths', emoji: '➗', mins: 3 },
-    { label: 'Quiet time', emoji: '📚', mins: 20 }
+    { id: 'tidy', label: 'Tidy-up race', emoji: '🧸', mins: 10 },
+    { id: 'dressed', label: 'Get dressed', emoji: '👕', mins: 5 },
+    { id: 'teeth', label: 'Teeth', emoji: '🪥', mins: 2 },
+    { id: 'maths', label: 'Maths', emoji: '➗', mins: 3 },
+    { id: 'quiet', label: 'Quiet time', emoji: '📚', mins: 20 }
   ];
   let timer = $state(null); // {label, emoji, total, left}
   let timerHandle = null;
@@ -167,10 +169,13 @@
     return out;
   }
 
-  function startTimer(chore) {
+  // startedAt: when Alexa asked, so the few seconds before this screen
+  // noticed come off the clock.
+  function startTimer(chore, startedAt) {
     unlock(); // the alarm plays later, without a tap
     stopTimer();
-    timer = { ...chore, total: chore.mins * 60, left: chore.mins * 60 };
+    const lag = startedAt ? Math.min(Math.max(Math.round((Date.now() - startedAt) / 1000), 0), 30) : 0;
+    timer = { ...chore, total: chore.mins * 60, left: chore.mins * 60 - lag };
     timerHandle = setInterval(() => {
       if (!timer) return;
       timer.left -= 1;
@@ -192,6 +197,21 @@
       timer = null;
     }
   }
+
+  // A timer started or stopped by voice.
+  $effect(() => {
+    const req = timerRequest;
+    if (!req) return;
+    untrack(() => {
+      if (req.chore === 'stop') {
+        if (timer && !timer.finished) stopTimer(false);
+      } else {
+        const chore = CHORES.find((c) => c.id === req.chore);
+        if (chore) startTimer(chore, req.at);
+      }
+      if (ontimerhandled) ontimerhandled();
+    });
+  });
 
   function fmtTime(s) {
     const m = Math.floor(s / 60);

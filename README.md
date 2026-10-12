@@ -159,8 +159,9 @@ docker compose -p peeters exec db psql -U peeters -c "UPDATE kids SET active = T
 
 ### Pictures and sounds
 
-Each child's ring shows their emoji from the `kids` table; 🤖 is drawn as a dancing robot
-(Malachi) and ⚡ as Pikachu (Atticus) — see `web/src/lib/Avatar.svelte`.
+Each child's ring shows their emoji from the `kids` table; ⚡ is drawn as an animated
+Pikachu (Malachi), 🦊 as Eevee (Atticus) and 🤖 as a dancing robot — see
+`web/src/lib/Avatar.svelte`.
 
 Finishing a morning or evening list plays that child's celebration tune, and a
 **Beat the clock** timer plays an alarm when it runs out. Tunes are synthesised in the
@@ -168,6 +169,24 @@ browser (`web/src/sounds.js`), and the melodies are original: "Pokémon-style" a
 "Minecraft-style" means the feel, not the real theme tunes. Choose and ▶ test them under
 ⚙️ **Settings → Sounds** (`sounds_on`, `sound_timer`, `sound_<kid>` in `settings`).
 Browsers only play sound after the screen has been tapped once since loading.
+
+### Alexa countdowns
+
+Alexa can start the **Beat the clock** timers. Home Assistant's emulated Hue bridge shows
+each one to Alexa as a "light" (Tidy up / Get dressed / Teeth / Maths / Quiet time
+countdown, plus Stop countdown). Turning one on calls `POST /api/timer {"chore":"maths"}`,
+and within ~5 seconds every screen jumps to the Kids tab, brightens and starts it.
+
+Set up once on the Mini (re-run safely after any change in `homeassistant/`):
+
+```bash
+cd ~/peeters-dashboard/homeassistant && sh apply.sh
+```
+
+Then say "Alexa, discover devices", and in the Alexa app add a **Routine** per timer for a
+natural phrase — When: *Voice* "maths time" → Action: *Smart Home* → Maths countdown →
+*Power on* (optionally *Alexa says* "Three minutes of maths, go!"). Avoid the word "timer"
+in phrases, or Alexa sets one of its own timers instead.
 
 ### Prizes
 
