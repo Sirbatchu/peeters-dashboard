@@ -12,7 +12,16 @@ const ITEMS_SQL = `
 const BALANCE_SQL = `
   SELECT COALESCE((SELECT SUM(points) FROM kid_days WHERE kid_slug = $1), 0)::int
        + COALESCE((SELECT SUM(points) FROM kid_awards WHERE kid_slug = $1), 0)::int
-       - COALESCE((SELECT SUM(cost) FROM rewards WHERE claimed_by = $1), 0)::int AS total`;
+       - COALESCE((SELECT SUM(cost) FROM reward_claims WHERE kid_slug = $1), 0)::int AS total`;
+
+// Prizes the family can claim again every day, added after launch.
+// Seeded once (tracked in settings) so a prize deleted later isn't re-added.
+const EXTRA_REWARDS = [
+  ['Ice cream', '🍦', 20],
+  ['Go out for breakfast', '🥞', 40],
+  ['Go out for lunch', '🍔', 50],
+  ['Go out for dinner', '🍝', 60]
+];
 
 async function stateFor(slug, day) {
   const [{ rows: items }, { rows: ticks }] = await Promise.all([
@@ -86,6 +95,48 @@ export default async function routes(app) {
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )`);
   await q('CREATE INDEX IF NOT EXISTS kid_awards_kid_idx ON kid_awards (kid_slug, created_at DESC)');
+
+  // Prizes reset daily: each claim is a row here (one per kid, prize and
+  // day) instead of marking the prize itself as used up.
+  await q(`CREATE TABLE IF NOT EXISTS reward_claims (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    reward_id  UUID NOT NULL REFERENCES rewards(id) ON DELETE CASCADE,
+    kid_slug   TEXT NOT NULL REFERENCES kids(slug) ON DELETE CASCADE,
+    cost       INT  NOT NULL,
+    day        DATE NOT NULL,
+    claimed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (reward_id, kid_slug, day)
+  )`);
+  // Move claims made under the old one-off scheme into the history (same
+  // stars spent, so balances don't change) and make those prizes available
+  // again. One statement, so it's all-or-nothing and safe to re-run.
+  await q(`WITH old AS (
+             SELECT id, claimed_by, cost, claimed_at FROM rewards
+              WHERE claimed_by IS NOT NULL FOR UPDATE),
+           moved AS (
+             INSERT INTO reward_claims (reward_id, kid_slug, cost, day, claimed_at)
+             SELECT id, claimed_by, cost, (claimed_at AT TIME ZONE $1)::date, claimed_at FROM old
+             ON CONFLICT DO NOTHING)
+           UPDATE rewards r SET claimed_at = NULL, claimed_by = NULL
+             FROM old WHERE r.id = old.id`,
+    [process.env.TZ || 'Europe/London']);
+
+  const { rowCount: seeded } = await q(
+    "SELECT 1 FROM settings WHERE key = 'rewards_seeded_v2'"
+  );
+  if (!seeded) {
+    for (const [label, emoji, cost] of EXTRA_REWARDS) {
+      await q(
+        `INSERT INTO rewards (label, emoji, cost)
+         SELECT $1::text, $2::text, $3::int
+          WHERE NOT EXISTS (SELECT 1 FROM rewards WHERE label = $1::text)`,
+        [label, emoji, cost]
+      );
+    }
+    await q(
+      "INSERT INTO settings (key, value) VALUES ('rewards_seeded_v2', '1') ON CONFLICT (key) DO NOTHING"
+    );
+  }
 
   // Everything the kids' board needs, in one request.
   app.get('/kids', async () => {
@@ -186,26 +237,45 @@ export default async function routes(app) {
   });
 
   // ── Rewards ──
+  // Every active prize, plus which kids have already claimed it today.
   app.get('/rewards', async () => {
     const { rows } = await q(
-      'SELECT * FROM rewards WHERE active ORDER BY claimed_at NULLS FIRST, cost'
+      `SELECT r.id, r.kid_slug, r.label, r.emoji, r.cost,
+              COALESCE(ARRAY_AGG(c.kid_slug) FILTER (WHERE c.kid_slug IS NOT NULL), '{}') AS claimed_today
+         FROM rewards r
+         LEFT JOIN reward_claims c ON c.reward_id = r.id AND c.day = $1
+        WHERE r.active
+        GROUP BY r.id
+        ORDER BY r.cost, r.label`,
+      [today()]
     );
     return rows;
   });
 
-  // Claiming spends the kid's star balance. No PIN: the family asked for
-  // claims and awards to be open.
+  // Claiming spends the kid's star balance. Each prize can be claimed once
+  // per kid per day. No PIN: the family asked for claims and awards to be open.
   app.post('/rewards/:id/claim', async (req, reply) => {
     const { kid_slug } = req.body || {};
     if (!kid_slug) return reply.status(400).send({ error: 'kid_slug required' });
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) {
+      return reply.status(404).send({ error: 'reward not available' });
+    }
 
-    const { rows: rw } = await q(
-      'SELECT * FROM rewards WHERE id = $1 AND active AND claimed_at IS NULL',
-      [req.params.id]
-    );
+    const { rows: rw } = await q('SELECT * FROM rewards WHERE id = $1 AND active', [req.params.id]);
     if (!rw.length) return reply.status(404).send({ error: 'reward not available' });
     if (rw[0].kid_slug && rw[0].kid_slug !== kid_slug) {
       return reply.status(400).send({ error: 'that reward belongs to someone else' });
+    }
+
+    const { rows: kid } = await q('SELECT slug FROM kids WHERE slug = $1', [kid_slug]);
+    if (!kid.length) return reply.status(404).send({ error: 'no such kid' });
+
+    const { rowCount: already } = await q(
+      'SELECT 1 FROM reward_claims WHERE reward_id = $1 AND kid_slug = $2 AND day = $3',
+      [req.params.id, kid_slug, today()]
+    );
+    if (already) {
+      return reply.status(409).send({ error: 'already claimed today — try again tomorrow' });
     }
 
     const { rows: bal } = await q(BALANCE_SQL, [kid_slug]);
@@ -213,10 +283,17 @@ export default async function routes(app) {
       return reply.status(400).send({ error: `needs ${rw[0].cost - bal[0].total} more stars` });
     }
 
+    // The unique (reward, kid, day) key makes a double tap a no-op.
     const { rows } = await q(
-      'UPDATE rewards SET claimed_at = now(), claimed_by = $2 WHERE id = $1 RETURNING *',
-      [req.params.id, kid_slug]
+      `INSERT INTO reward_claims (reward_id, kid_slug, cost, day)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (reward_id, kid_slug, day) DO NOTHING
+       RETURNING *`,
+      [req.params.id, kid_slug, rw[0].cost, today()]
     );
+    if (!rows.length) {
+      return reply.status(409).send({ error: 'already claimed today — try again tomorrow' });
+    }
     return rows[0];
   });
 

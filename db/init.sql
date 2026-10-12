@@ -128,7 +128,7 @@ CREATE INDEX kid_awards_kid_idx ON kid_awards (kid_slug, created_at DESC);
 
 -- Things kids are saving their stars up for. Claiming spends stars:
 -- balance = SUM(kid_days.points) + SUM(kid_awards.points)
---         - SUM(claimed rewards' cost).
+--         - SUM(reward_claims.cost).
 CREATE TABLE rewards (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   kid_slug    TEXT REFERENCES kids(slug) ON DELETE CASCADE,  -- NULL = any kid
@@ -144,6 +144,21 @@ INSERT INTO rewards (kid_slug, label, emoji, cost) VALUES
   (NULL, 'Movie night',       '🍿', 50),
   (NULL, 'Trip to the park',  '🛝', 30),
   (NULL, 'Choose dinner',     '🍕', 40);
+-- (Ice cream / breakfast / lunch / dinner out are added by the API on first
+-- start, so existing databases get them too.)
+
+-- Prizes reset daily: one row per claim, at most one per kid, prize and day.
+-- (rewards.claimed_at/claimed_by are from the old one-off scheme; the API
+-- moves any old claims in here on startup.)
+CREATE TABLE reward_claims (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reward_id  UUID NOT NULL REFERENCES rewards(id) ON DELETE CASCADE,
+  kid_slug   TEXT NOT NULL REFERENCES kids(slug) ON DELETE CASCADE,
+  cost       INT  NOT NULL,
+  day        DATE NOT NULL,
+  claimed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (reward_id, kid_slug, day)
+);
 
 -- ─────────────────────────────────────────────
 -- BIRTHDAYS  (migrated off localStorage)

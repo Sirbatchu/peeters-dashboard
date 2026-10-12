@@ -108,7 +108,7 @@
     try {
       const [k, r] = await Promise.all([api.get('/kids'), api.get('/rewards')]);
       kids = k;
-      rewards = r.filter((rw) => !rw.claimed_at);
+      rewards = r;
       const hists = await Promise.all(
         k.map((kid) => api.get('/kids/' + kid.slug + '/history?days=14'))
       );
@@ -168,13 +168,28 @@
     return m + ':' + (sec < 10 ? '0' : '') + sec;
   }
 
+  // Why a kid can't claim this prize right now ('' = they can).
+  // Prizes reset daily: each kid can have each one once per day.
+  function claimBlock(kid, reward) {
+    if (reward.kid_slug && reward.kid_slug !== kid.slug) return 'not theirs';
+    if ((reward.claimed_today || []).indexOf(kid.slug) !== -1) return 'had it today';
+    if (kid.stars < reward.cost) return 'needs ' + (reward.cost - kid.stars) + ' more';
+    return '';
+  }
+
+  function claimedTodayBy(reward) {
+    return kids.filter((k) => (reward.claimed_today || []).indexOf(k.slug) !== -1);
+  }
+
   function openClaim(reward) {
     claiming = reward;
-    claimKid = reward.kid_slug || (kids[0] && kids[0].slug) || '';
+    const first = kids.find((k) => !claimBlock(k, reward));
+    claimKid = first ? first.slug : '';
     claimError = '';
   }
 
   async function confirmClaim() {
+    if (!claimKid) return (claimError = 'Nobody can claim this one right now');
     try {
       await api.post('/rewards/' + claiming.id + '/claim', {
         kid_slug: claimKid
@@ -358,13 +373,18 @@
 
 {#if rewards.length}
   <div class="card rewards">
-    <div class="rewards-title">🎁 Saving up for <span class="rewards-hint">tap to claim</span></div>
+    <div class="rewards-title">🎁 Saving up for <span class="rewards-hint">tap to claim · resets every day</span></div>
     <div class="rewards-grid">
       {#each rewards as r (r.id)}
         <button class="reward" onclick={() => openClaim(r)}>
           <div class="reward-emoji">{r.emoji}</div>
           <div class="reward-label">{r.label}</div>
           <div class="reward-cost">⭐ {r.cost}</div>
+          {#if claimedTodayBy(r).length}
+            <div class="reward-today" title="Claimed today">
+              ✓ {claimedTodayBy(r).map((k) => k.emoji).join(' ')}
+            </div>
+          {/if}
         </button>
       {/each}
     </div>
@@ -394,17 +414,21 @@
           <button
             class="claim-kid"
             class:sel={claimKid === kid.slug}
+            disabled={!!claimBlock(kid, claiming)}
             style={claimKid === kid.slug ? 'border-color:' + kid.colour : ''}
             onclick={() => (claimKid = kid.slug)}
           >
             {kid.emoji} {kid.name}
             <span class="claim-bal">⭐ {kid.stars}</span>
+            {#if claimBlock(kid, claiming)}<span class="claim-why">{claimBlock(kid, claiming)}</span>{/if}
           </button>
         {/each}
       </div>
 
       {#if claimError}<div class="claim-err">{claimError}</div>{/if}
-      <button class="claim-go" onclick={confirmClaim}>Claim it! 🎉</button>
+      <button class="claim-go" disabled={!claimKid} onclick={confirmClaim}>
+        {claimKid ? 'Claim it! 🎉' : 'Nobody can claim this one yet'}
+      </button>
     </div>
   </div>
 {/if}
@@ -897,6 +921,25 @@
   }
   .claim-kid.sel {
     background: #fff;
+  }
+  .claim-kid:disabled {
+    opacity: 0.45;
+  }
+  .claim-why {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #b45309;
+    margin-top: 2px;
+  }
+  .reward {
+    position: relative;
+  }
+  .reward-today {
+    font-size: 12px;
+    font-weight: 600;
+    color: #15803d;
+    margin-top: 3px;
   }
   .claim-bal {
     display: block;
