@@ -1,5 +1,9 @@
 <script>
   import { api } from '../api.js';
+  import { play, unlock, kidSound, timerSound, soundsOn } from '../sounds.js';
+  import Avatar from './Avatar.svelte';
+
+  let { settings = {} } = $props();
 
   let kids = $state([]);
   let rewards = $state([]);
@@ -164,6 +168,7 @@
   }
 
   function startTimer(chore) {
+    unlock(); // the alarm plays later, without a tap
     stopTimer();
     timer = { ...chore, total: chore.mins * 60, left: chore.mins * 60 };
     timerHandle = setInterval(() => {
@@ -180,6 +185,7 @@
     timerHandle = null;
     if (finished) {
       bigConfetti();
+      if (soundsOn(settings)) play(timerSound(settings));
       timer = { ...timer, left: 0, finished: true };
       setTimeout(() => (timer = null), 5000);
     } else {
@@ -239,6 +245,7 @@
 
   async function tick(kid, item, evt) {
     // Optimistic flip so the tap feels instant on old hardware.
+    unlock();
     item.done = !item.done;
 
     if (item.done) confettiAt(evt.clientX, evt.clientY);
@@ -253,6 +260,7 @@
       // Celebrate finishing this routine (the morning or the evening).
       if (fresh.justTicked && progress(kid, item.routine).complete) {
         celebrating = kid.slug;
+        if (soundsOn(settings)) play(kidSound(settings, kid.slug));
         bigConfetti();
         setTimeout(() => (celebrating = null), 3500);
         load(); // refresh star totals
@@ -322,7 +330,7 @@
               style="-webkit-transition: stroke-dashoffset .5s ease; transition: stroke-dashoffset .5s ease"
             />
           </svg>
-          <div class="ring-emoji">{kid.emoji}</div>
+          <div class="ring-emoji"><Avatar emoji={kid.emoji} size={50} /></div>
         </div>
         <div>
           <div class="kid-name">{kid.name}</div>

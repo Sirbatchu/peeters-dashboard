@@ -157,6 +157,18 @@ board. Waverly is hidden for now; to bring her back:
 docker compose -p peeters exec db psql -U peeters -c "UPDATE kids SET active = TRUE WHERE slug = 'waverly'"
 ```
 
+### Pictures and sounds
+
+Each child's ring shows their emoji from the `kids` table; 🤖 is drawn as a dancing robot
+(Malachi) and ⚡ as Pikachu (Atticus) — see `web/src/lib/Avatar.svelte`.
+
+Finishing a morning or evening list plays that child's celebration tune, and a
+**Beat the clock** timer plays an alarm when it runs out. Tunes are synthesised in the
+browser (`web/src/sounds.js`), and the melodies are original: "Pokémon-style" and
+"Minecraft-style" means the feel, not the real theme tunes. Choose and ▶ test them under
+⚙️ **Settings → Sounds** (`sounds_on`, `sound_timer`, `sound_<kid>` in `settings`).
+Browsers only play sound after the screen has been tapped once since loading.
+
 ### Prizes
 
 The **Saving up for** card lists prizes kids spend their stars on. They **reset every

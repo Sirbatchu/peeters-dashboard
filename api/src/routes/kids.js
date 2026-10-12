@@ -185,6 +185,12 @@ export default async function routes(app) {
   await q('ALTER TABLE kids ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE');
   await once('waverly_hidden_v1', () => q("UPDATE kids SET active = FALSE WHERE slug = 'waverly'"));
 
+  // Animated pictures: the board draws 🤖 as a dancing robot and ⚡ as Pikachu.
+  await once('avatars_v1', () =>
+    q(`UPDATE kids SET emoji = CASE slug WHEN 'malachi' THEN '🤖' ELSE '⚡' END
+        WHERE slug IN ('malachi', 'atticus')`)
+  );
+
   // Everything the kids' board needs, in one request.
   app.get('/kids', async () => {
     const day = today();
