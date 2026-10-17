@@ -6,7 +6,7 @@
 # paths (/description.xml, /api, /api/nouser/*) here. See web/Caddyfile.
 emulated_hue:
   listen_port: 8300
-  advertise_ip: 192.168.10.6
+  advertise_ip: 192.168.10.6  # apply.sh fills this in from DASHBOARD_HOST in .env
   advertise_port: 80
   expose_by_default: false
   entities:

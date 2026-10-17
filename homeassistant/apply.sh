@@ -13,7 +13,14 @@ STAMP=$(date +%Y%m%d-%H%M%S)
 docker exec "$C" cp /config/configuration.yaml "/config/configuration.yaml.bak-$STAMP"
 docker exec "$C" sh -c "[ -f /config/scripts.yaml ] && cp /config/scripts.yaml /config/scripts.yaml.bak-$STAMP || true"
 
-docker cp "$HERE/configuration.append.yaml" "$C:/tmp/peeters-block.yaml"
+# The Hue bridge advertises the Mini's IP: DASHBOARD_HOST from ../.env.
+HOST=$(sed -n 's/^DASHBOARD_HOST=//p' "$HERE/../.env" 2>/dev/null | tail -n 1 | tr -d '"'"'"' \r')
+HOST=${HOST:-192.168.10.6}
+echo "Advertising the Hue bridge at $HOST"
+BLOCK=$(mktemp)
+sed "s/^\(  advertise_ip:\).*/\1 $HOST/" "$HERE/configuration.append.yaml" > "$BLOCK"
+docker cp "$BLOCK" "$C:/tmp/peeters-block.yaml"
+rm -f "$BLOCK"
 docker exec "$C" python3 - <<'PY'
 start = '# ── Peeters dashboard: voice control'
 end_marker = '# ── end Peeters dashboard'

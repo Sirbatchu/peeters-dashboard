@@ -36,7 +36,7 @@ services:
       DATABASE_URL: postgres://peeters:${POSTGRES_PASSWORD}@db:5432/peeters
       TZ: ${TZ:-Europe/London}
       WEATHER_LOC: ${WEATHER_LOC:-Bristol}
-      PUBLIC_URL: ${PUBLIC_URL:-http://192.168.10.6}
+      PUBLIC_URL: ${PUBLIC_URL:-http://${DASHBOARD_HOST:-192.168.10.6}}
       # Home Assistant is on host networking, so reach it via the gateway.
       HA_URL: ${HA_URL:-http://host.docker.internal:8123}
       HA_TOKEN: ${HA_TOKEN:-}
@@ -54,7 +54,7 @@ services:
       JARVIS_VOICE: ${JARVIS_VOICE-Brian}
     volumes:
       - ./photos:/photos:ro
-      # Background photos uploaded from phones via http://192.168.10.6/photos
+      # Background photos uploaded from phones via http://<host>/photos
       - backgrounds:/backgrounds
     extra_hosts:
       - 'host.docker.internal:host-gateway'
@@ -65,6 +65,10 @@ services:
   web:
     build: ./web
     restart: unless-stopped
+    environment:
+      # The Mini's LAN address: Caddy's HTTPS certificate and the Alexa Hue
+      # proxy use it (see web/Caddyfile).
+      DASHBOARD_HOST: ${DASHBOARD_HOST:-192.168.10.6}
     ports:
       - '80:80'
       # HTTPS for the Android tablet's app install (local CA, see Caddyfile).

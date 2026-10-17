@@ -1,7 +1,7 @@
 <script>
   // Phone page at /photos: add background photos from the camera roll and
   // choose what the dashboard shows. Open it by scanning the QR code on the
-  // House tab, or bookmark http://192.168.10.6/photos on your home screen.
+  // House tab, or bookmark http://<dashboard address>/photos on your home screen.
   import { api } from '../api.js';
 
   let photos = $state([]);

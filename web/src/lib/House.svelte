@@ -105,7 +105,7 @@
     <div class="note-title">🏠 Home Assistant isn't linked yet</div>
     <p>
       Phone finder and cameras switch on once HA is set up: finish onboarding at
-      <strong>http://192.168.10.6:8123</strong>, create a long-lived token, and add it to
+      <strong>http://{location.hostname}:8123</strong>, create a long-lived token, and add it to
       <code>.env</code> as <code>HA_TOKEN</code>.
     </p>
   </div>
