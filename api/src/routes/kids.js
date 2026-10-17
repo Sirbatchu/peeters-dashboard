@@ -38,6 +38,12 @@ const EVENING_ITEMS = [
   ['Brush teeth', '🪥']
 ];
 
+// Times-tables game: 1 star per TABLES_PER_STAR right answers in a round,
+// at most TABLES_DAILY_CAP stars a day from the game.
+const TABLES_PER_STAR = 5;
+const TABLES_DAILY_CAP = 5;
+const TABLES_BY = 'Times tables';
+
 /** Run a one-off data change once, remembered by a settings key. */
 async function once(key, fn) {
   const { rowCount } = await q('SELECT 1 FROM settings WHERE key = $1', [key]);
@@ -196,6 +202,19 @@ export default async function routes(app) {
         WHERE slug IN ('malachi', 'atticus')`)
   );
 
+  // One row per times-tables round (stars it earned also go in kid_awards).
+  await q(`CREATE TABLE IF NOT EXISTS tables_rounds (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    kid_slug   TEXT NOT NULL REFERENCES kids(slug) ON DELETE CASCADE,
+    day        DATE NOT NULL,
+    correct    INT  NOT NULL,
+    wrong      INT  NOT NULL,
+    tables     TEXT NOT NULL,
+    stars      INT  NOT NULL DEFAULT 0,
+    played_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+  await q('CREATE INDEX IF NOT EXISTS tables_rounds_kid_idx ON tables_rounds (kid_slug, day DESC)');
+
   // Everything the kids' board needs, in one request.
   app.get('/kids', async () => {
     const day = today();
@@ -353,6 +372,61 @@ export default async function routes(app) {
       return reply.status(409).send({ error: 'already claimed today — try again tomorrow' });
     }
     return rows[0];
+  });
+
+  // ── Times-tables game ──
+  async function tablesStats(slug) {
+    const { rows } = await q(
+      `SELECT COALESCE(MAX(correct), 0)::int AS best,
+              COALESCE(SUM(stars) FILTER (WHERE day = $2), 0)::int AS today_stars,
+              COUNT(*) FILTER (WHERE day = $2)::int AS today_rounds
+         FROM tables_rounds WHERE kid_slug = $1`,
+      [slug, today()]
+    );
+    return { ...rows[0], per_star: TABLES_PER_STAR, daily_cap: TABLES_DAILY_CAP };
+  }
+
+  app.get('/kids/:slug/tables', async (req) => tablesStats(req.params.slug));
+
+  // A finished 60-second round. Stars are worked out here, not trusted from
+  // the screen, and capped per day.
+  app.post('/kids/:slug/tables', async (req, reply) => {
+    const { slug } = req.params;
+    const correct = Number(req.body?.correct);
+    const wrong = Number(req.body?.wrong);
+    const tables = String(req.body?.tables || '');
+    const ok = (n) => Number.isInteger(n) && n >= 0 && n <= 200;
+    if (!ok(correct) || !ok(wrong)) return reply.status(400).send({ error: 'bad score' });
+    const nums = tables.split(',').map(Number);
+    if (!tables || nums.some((n) => !Number.isInteger(n) || n < 1 || n > 12)) {
+      return reply.status(400).send({ error: 'tables must be numbers 1-12, e.g. 2,5,10' });
+    }
+    const { rows: kid } = await q('SELECT slug FROM kids WHERE slug = $1', [slug]);
+    if (!kid.length) return reply.status(404).send({ error: 'no such kid' });
+
+    const before = await tablesStats(slug);
+    const stars = Math.max(
+      0,
+      Math.min(Math.floor(correct / TABLES_PER_STAR), TABLES_DAILY_CAP - before.today_stars)
+    );
+    await q(
+      `INSERT INTO tables_rounds (kid_slug, day, correct, wrong, tables, stars)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [slug, today(), correct, wrong, tables, stars]
+    );
+    if (stars) {
+      await q(
+        `INSERT INTO kid_awards (kid_slug, points, note, awarded_by) VALUES ($1, $2, $3, $4)`,
+        [slug, stars, `${correct} right in a round (${tables}× tables)`, TABLES_BY]
+      );
+    }
+    const { rows: bal } = await q(BALANCE_SQL, [slug]);
+    return {
+      stars,
+      new_best: correct > before.best && correct > 0,
+      balance: bal[0].total,
+      ...(await tablesStats(slug))
+    };
   });
 
   // ── Bonus stars, awarded by a parent with a note saying why and who ──

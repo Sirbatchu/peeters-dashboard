@@ -38,6 +38,16 @@
   let soundOn = $state(soundsOn(opened));
   // svelte-ignore state_referenced_locally
   let timerSnd = $state(timerSound(opened));
+  // svelte-ignore state_referenced_locally
+  let remindAt = $state(opened.reminder_time || '18:00');
+  // svelte-ignore state_referenced_locally
+  let remindOn = $state(opened.reminder_enabled !== '0');
+  let reminders = $state([]);
+  let rLabel = $state('');
+  let rEmoji = $state('');
+  let rDay = $state(1);
+  let rRepeat = $state('1'); // '1' = every week, else the first date (every other week)
+  let rError = $state('');
   let kids = $state([]);
   let kidSnds = $state({}); // slug -> celebration id
   let busy = $state(false);
@@ -56,6 +66,82 @@
         /* sound choices just won't show */
       });
   });
+
+  const WEEKDAYS = [
+    { n: 1, label: 'Monday' },
+    { n: 2, label: 'Tuesday' },
+    { n: 3, label: 'Wednesday' },
+    { n: 4, label: 'Thursday' },
+    { n: 5, label: 'Friday' },
+    { n: 6, label: 'Saturday' },
+    { n: 7, label: 'Sunday' }
+  ];
+
+  function loadReminders() {
+    api
+      .get('/reminders')
+      .then((r) => (reminders = r))
+      .catch(() => {});
+  }
+
+  $effect(() => {
+    loadReminders();
+  });
+
+  // The next two dates on the chosen weekday, as YYYY-MM-DD, so "every
+  // other week" is just a choice of which one comes first.
+  function nextTwo(wd) {
+    const d = new Date();
+    d.setHours(12, 0, 0, 0);
+    while (((d.getDay() + 6) % 7) + 1 !== wd) d.setDate(d.getDate() + 1);
+    const out = [];
+    for (let i = 0; i < 2; i++) {
+      out.push(
+        d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+      );
+      d.setDate(d.getDate() + 7);
+    }
+    return out;
+  }
+
+  function niceDate(ds) {
+    if (!ds) return '';
+    return new Date(ds + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+
+  function repeatText(r) {
+    return r.every_weeks === 2 ? 'every other ' + r.day_name : 'every ' + r.day_name;
+  }
+
+  async function addReminder() {
+    rError = '';
+    if (!rLabel.trim()) return (rError = 'Say what to remember, e.g. PE kit');
+    try {
+      await api.post('/reminders', {
+        label: rLabel.trim(),
+        emoji: rEmoji.trim(),
+        weekday: Number(rDay),
+        every_weeks: rRepeat === '1' ? 1 : 2,
+        anchor: rRepeat === '1' ? null : rRepeat
+      });
+      rLabel = '';
+      rEmoji = '';
+      rRepeat = '1';
+      loadReminders();
+    } catch (e) {
+      rError = e.message;
+    }
+  }
+
+  async function removeReminder(r) {
+    if (!confirm('Stop reminding about "' + r.label + '"?')) return;
+    try {
+      await api.del('/reminders/' + r.id);
+      loadReminders();
+    } catch (e) {
+      rError = e.message;
+    }
+  }
 
   function test(id) {
     unlock();
@@ -86,6 +172,8 @@
         morning_start: start,
         school_days: days,
         sounds_on: soundOn ? '1' : '0',
+        reminder_enabled: remindOn ? '1' : '0',
+        reminder_time: remindAt,
         sound_timer: timerSnd,
         ...Object.fromEntries(Object.keys(kidSnds).map((slug) => ['sound_' + slug, kidSnds[slug]]))
       });
@@ -139,6 +227,52 @@
         {/each}
       </div>
     </div>
+
+    <div class="section">🔔 Reminders</div>
+    <p class="note">
+      Shown on the Next-up strip from midday the day before, said by Alexa the evening before
+      and again in the morning briefing.
+    </p>
+
+    {#each reminders as r (r.id)}
+      <div class="rem">
+        <span class="rem-emoji">{r.emoji}</span>
+        <span class="rem-body">
+          <span class="rem-label">{r.label}</span>
+          <span class="rem-meta">{repeatText(r)} · next {niceDate(r.next)}</span>
+        </span>
+        <button class="rem-del" onclick={() => removeReminder(r)} aria-label="Remove">🗑</button>
+      </div>
+    {/each}
+
+    <div class="rem-add">
+      <input class="rem-e" placeholder="🔔" maxlength="4" bind:value={rEmoji} />
+      <input class="rem-l" placeholder="e.g. PE kit" maxlength="60" bind:value={rLabel} />
+    </div>
+    <div class="rem-add2">
+      <select bind:value={rDay} onchange={() => (rRepeat = '1')}>
+        {#each WEEKDAYS as d (d.n)}<option value={d.n}>{d.label}</option>{/each}
+      </select>
+      <select bind:value={rRepeat}>
+        <option value="1">Every week</option>
+        {#each nextTwo(Number(rDay)) as ds (ds)}
+          <option value={ds}>Every other week, from {niceDate(ds)}</option>
+        {/each}
+      </select>
+      <button class="test" onclick={addReminder}>＋ Add</button>
+    </div>
+    {#if rError}<div class="error">{rError}</div>{/if}
+
+    <label class="toggle">
+      <input type="checkbox" bind:checked={remindOn} />
+      <span>Alexa says them the evening before</span>
+    </label>
+    {#if remindOn}
+      <label class="fld">
+        <span>Evening reminder at</span>
+        <input type="time" bind:value={remindAt} />
+      </label>
+    {/if}
 
     <div class="section">🔊 Sounds</div>
 
@@ -266,6 +400,63 @@
     background: var(--header);
     border-color: var(--header);
     color: #fff;
+  }
+  .note {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: -4px 0 10px;
+  }
+  .rem {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-gap: 10px;
+    align-items: center;
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+  }
+  .rem-emoji {
+    font-size: 22px;
+  }
+  .rem-label {
+    display: block;
+    font-weight: 600;
+  }
+  .rem-meta {
+    display: block;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .rem-del {
+    font-size: 16px;
+    padding: 4px 6px;
+  }
+  .rem-add,
+  .rem-add2 {
+    display: grid;
+    grid-gap: 8px;
+    margin-top: 8px;
+  }
+  .rem-add {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+  .rem-add2 {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) auto;
+    margin-bottom: 12px;
+  }
+  .rem-add input,
+  .rem-add2 select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 15px;
+    background: #fff;
+  }
+  .rem-e {
+    text-align: center;
   }
   .toggle {
     display: grid;

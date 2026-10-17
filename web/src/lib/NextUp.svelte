@@ -1,9 +1,10 @@
 <script>
-  // "Next up": the next few events with live countdowns, upcoming birthdays
-  // and pinned family notes, in one glanceable row under the header.
+  // "Next up": reminders (bins, PE kit...), the next few events with live
+  // countdowns, upcoming birthdays and pinned family notes, in one
+  // glanceable row under the header.
   import { api } from '../api.js';
 
-  let data = $state({ events: [], birthdays: [], notes: [] });
+  let data = $state({ reminders: [], events: [], birthdays: [], notes: [] });
   let now = $state(new Date());
 
   async function load() {
@@ -65,7 +66,9 @@
     return 'in ' + b.days + ' days';
   }
 
-  let empty = $derived(!data.events.length && !data.birthdays.length && !data.notes.length);
+  let empty = $derived(
+    !(data.reminders || []).length && !data.events.length && !data.birthdays.length && !data.notes.length
+  );
 
   // ‹ › arrows instead of a scrollbar. They step chip by chip and wrap round
   // at either end, so the strip can be cycled through indefinitely.
@@ -133,6 +136,13 @@
     {/if}
     <div class="rail" bind:this={rail}>
       <span class="label">Next up</span>
+
+      {#each data.reminders || [] as r (r.id)}
+        <span class="chip remind" class:today={r.when === 'today'}>
+          {r.emoji} <span class="when">{r.when === 'today' ? 'Today' : 'Tomorrow'}</span>
+          <span class="title">{r.label}</span>
+        </span>
+      {/each}
 
       {#each data.events as e (e.id + e.starts_at)}
         <span class="chip ev" class:soon={soon(e)} style="border-left-color:{e.colour}">
@@ -240,6 +250,16 @@
   }
   .chip.soon {
     background: #fef3c7;
+  }
+  .chip.remind {
+    background: #fef3c7;
+    border-left-color: #f59e0b;
+  }
+  .chip.remind.today {
+    background: #fde68a;
+  }
+  .chip.remind .when {
+    margin-left: 4px;
   }
   .chip.bday .when {
     margin: 0 0 0 6px;

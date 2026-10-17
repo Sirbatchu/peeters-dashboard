@@ -7,6 +7,9 @@ import household from './routes/household.js';
 import misc from './routes/misc.js';
 import backgrounds from './routes/backgrounds.js';
 import alexa from './routes/alexa.js';
+import reminders from './routes/reminders.js';
+import jarvis from './routes/jarvis.js';
+import { startSkillServer } from './jarvis/skill.js';
 
 const app = Fastify({
   logger: { level: process.env.LOG_LEVEL || 'info' }
@@ -31,7 +34,9 @@ app.register(kids, { prefix: '/api' });
 app.register(home, { prefix: '/api' });
 app.register(household, { prefix: '/api' });
 app.register(backgrounds, { prefix: '/api' });
+app.register(reminders, { prefix: '/api' });
 app.register(alexa, { prefix: '/api' });
+app.register(jarvis, { prefix: '/api' });
 
 app.setErrorHandler((err, req, reply) => {
   req.log.error(err);
@@ -41,6 +46,8 @@ app.setErrorHandler((err, req, reply) => {
 const start = async () => {
   await waitForDb(app.log);
   await app.listen({ port: 3000, host: '0.0.0.0' });
+  // "Alexa, ask Jarvis ..." — only once the skill has been created.
+  if (process.env.ALEXA_SKILL_ID) await startSkillServer(app);
 };
 
 start().catch((err) => {
