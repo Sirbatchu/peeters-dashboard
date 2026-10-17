@@ -13,6 +13,14 @@ Wall dashboard for the kitchen iPad, served from the Mac Mini at `192.168.10.6`.
 The iPad runs it fullscreen via Safari → Share → **Add to Home Screen**. It must be
 Safari; Chrome on iOS cannot install home-screen apps.
 
+The Mini's address is **`DASHBOARD_HOST`** in `.env` (default `192.168.10.6`; the
+addresses on this page assume that). Caddy's HTTPS certificate, the Alexa Hue bridge proxy
+and the calendar-feed links all follow it. If the Mini's IP changes, set it there, redeploy
+(or `docker compose -p peeters up -d`), and re-run `homeassistant/apply.sh` so the Echos
+find the bridge at the new address. Use an IP rather than a hostname — Echo devices need
+an IP for the Hue bridge. The tablet keeps trusting the dashboard: Caddy issues a fresh
+certificate for the new address from the same local CA.
+
 ## The Android tablet (TCL 10")
 
 Chrome only offers **Install** (a real fullscreen app) on HTTPS — on plain
