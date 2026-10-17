@@ -1,0 +1,248 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "jarvis",
+      "intents": [
+        {
+          "name": "JarvisIntent",
+          "slots": [
+            {
+              "name": "query",
+              "type": "JARVIS_PHRASE"
+            }
+          ],
+          "samples": [
+            "{query}"
+          ]
+        },
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NavigateHomeIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        }
+      ],
+      "types": [
+        {
+          "name": "JARVIS_PHRASE",
+          "values": [
+            {
+              "name": {
+                "value": "what's on today"
+              }
+            },
+            {
+              "name": {
+                "value": "what are we doing this weekend"
+              }
+            },
+            {
+              "name": {
+                "value": "am i free on friday afternoon"
+              }
+            },
+            {
+              "name": {
+                "value": "when is the next dentist appointment"
+              }
+            },
+            {
+              "name": {
+                "value": "add milk to the shopping list"
+              }
+            },
+            {
+              "name": {
+                "value": "put eggs and bread on the shopping list"
+              }
+            },
+            {
+              "name": {
+                "value": "what's on the shopping list"
+              }
+            },
+            {
+              "name": {
+                "value": "what's for dinner tonight"
+              }
+            },
+            {
+              "name": {
+                "value": "what's the weather like tomorrow"
+              }
+            },
+            {
+              "name": {
+                "value": "do i need a coat"
+              }
+            },
+            {
+              "name": {
+                "value": "add swimming for malachi on tuesday at five"
+              }
+            },
+            {
+              "name": {
+                "value": "remind us to put the bins out every monday"
+              }
+            },
+            {
+              "name": {
+                "value": "start the maths timer"
+              }
+            },
+            {
+              "name": {
+                "value": "start tidy up time"
+              }
+            },
+            {
+              "name": {
+                "value": "how many stars has atticus got"
+              }
+            },
+            {
+              "name": {
+                "value": "who still has jobs to do"
+              }
+            },
+            {
+              "name": {
+                "value": "it's bedtime"
+              }
+            },
+            {
+              "name": {
+                "value": "dim the screens"
+              }
+            },
+            {
+              "name": {
+                "value": "play radio two in the kitchen"
+              }
+            },
+            {
+              "name": {
+                "value": "pause the music"
+              }
+            },
+            {
+              "name": {
+                "value": "find my phone"
+              }
+            },
+            {
+              "name": {
+                "value": "find jamie lee's phone"
+              }
+            },
+            {
+              "name": {
+                "value": "tell everyone dinner is ready"
+              }
+            },
+            {
+              "name": {
+                "value": "set a timer for ten minutes"
+              }
+            },
+            {
+              "name": {
+                "value": "turn off the lounge lights"
+              }
+            },
+            {
+              "name": {
+                "value": "run movie night"
+              }
+            },
+            {
+              "name": {
+                "value": "pin a note saying pick up the parcel"
+              }
+            },
+            {
+              "name": {
+                "value": "whose birthday is next"
+              }
+            },
+            {
+              "name": {
+                "value": "what time do we leave for school"
+              }
+            },
+            {
+              "name": {
+                "value": "what's happening tomorrow"
+              }
+            },
+            {
+              "name": {
+                "value": "tell me a joke"
+              }
+            },
+            {
+              "name": {
+                "value": "how far is the moon"
+              }
+            },
+            {
+              "name": {
+                "value": "what should we have for tea"
+              }
+            },
+            {
+              "name": {
+                "value": "say goodnight to the kids"
+              }
+            },
+            {
+              "name": {
+                "value": "read me the morning briefing"
+              }
+            },
+            {
+              "name": {
+                "value": "what's on this week for matthew"
+              }
+            },
+            {
+              "name": {
+                "value": "cancel the timer"
+              }
+            },
+            {
+              "name": {
+                "value": "turn the volume down"
+              }
+            },
+            {
+              "name": {
+                "value": "is it going to rain today"
+              }
+            },
+            {
+              "name": {
+                "value": "what day is the recycling"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

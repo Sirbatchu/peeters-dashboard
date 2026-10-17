@@ -228,6 +228,69 @@ another name). Awards add to the same ⭐ balance rewards are
 claimed from, and the panel lists recent awards — 🗑 removes a mistake.
 They're stored in the `kid_awards` table, which the API creates on startup if missing.
 
+## J.A.R.V.I.S. (Alexa skill)
+
+Say **"Alexa, ask Jarvis …"** and Claude answers in a British voice, using the dashboard
+as his toolbox: the calendar (read and add), shopping list, reminders, dinners, pinned
+notes, weather, the Kids board and its countdowns, bedtime and dimming, speakers, phone
+finder, Home Assistant scripts, and the Echos themselves. For things Alexa does natively
+(music, Alexa timers, lights Alexa owns) he hands Alexa the command through Home
+Assistant, just after he finishes speaking.
+
+- "Alexa, ask Jarvis what we're doing this weekend"
+- "Alexa, ask Jarvis to put eggs and bread on the shopping list"
+- "Alexa, ask Jarvis to add swimming for Malachi on Tuesday at five"
+- "Alexa, ask Jarvis to play Radio 2 in the kitchen" (he passes it to Alexa)
+- "Alexa, open Jarvis" for a back-and-forth. The mic stays open a few seconds after each
+  answer, so a follow-up ("and Sunday?") needs no "Alexa".
+
+**How it fits together.** Alexa's cloud → Cloudflare Tunnel → `api` container port
+**3001**, which serves exactly one route (`POST /alexa`). Every request must carry Amazon's
+signature for our skill ID or it's rejected, and nothing else on the Mini is published.
+Claude reaches the dashboard in-process (`api/src/jarvis/`). Alexa only gives a skill 8
+seconds; if Jarvis needs longer he says "Bear with me a moment" and the answer comes out of
+the Jarvis Echo (`jarvis_target` in `settings`, defaulting to `briefing_target`) through
+Home Assistant, in Alexa's normal voice.
+
+**Test without Alexa** (any machine on the Wi-Fi), once the API key is in `.env`:
+
+```bash
+curl -X POST http://192.168.10.6/api/jarvis -H 'Content-Type: application/json' \
+  -d '{"text":"what is on this weekend?"}'
+```
+
+### Setting it up
+
+1. **Claude API key.** Create one at platform.claude.com and add
+   `ANTHROPIC_API_KEY=...` to `.env` on the Mini.
+2. **Cloudflare Tunnel.** In Cloudflare Zero Trust → Networks → Tunnels, create a tunnel
+   (Docker), copy its token, and add a **public hostname** on a domain you own, e.g.
+   `jarvis.example.co.uk`, pointing at service **`http://api:3001`**. In `.env` add
+   `CLOUDFLARE_TUNNEL_TOKEN=...` and `COMPOSE_PROFILES=jarvis`.
+3. **The skill.** At developer.amazon.com/alexa/console/ask → *Create Skill*: name
+   "Jarvis", locale **English (UK)**, type **Custom**, hosting **Provision your own**,
+   template **Start from scratch**. Then:
+   - *Interaction Model → JSON Editor*: paste `alexa/interaction-model.json`, **Save**,
+     **Build**.
+   - *Endpoint*: HTTPS, `https://jarvis.example.co.uk/alexa`, certificate option
+     *"My development endpoint is a sub-domain of a domain that has a wildcard
+     certificate from a certificate authority"*. Save.
+   - Copy the Skill ID (`amzn1.ask.skill....`) into `.env` as `ALEXA_SKILL_ID=...`.
+4. **Deploy**: push to `main` (or `docker compose -p peeters up -d --build` on the Mini).
+   The skill port only starts once `ALEXA_SKILL_ID` is set.
+5. *Test* tab in the console → set testing to **Development**. The skill is then live on
+   every Echo signed in to the same Amazon account. It's never published, so nobody
+   else can use it.
+
+If the console rejects the one-word invocation name "jarvis" (Amazon discourages them),
+change `invocationName` to two words, e.g. "house jarvis", and say "ask house jarvis".
+
+| `.env` | Default | |
+| --- | --- | --- |
+| `JARVIS_MODEL` | `claude-opus-5-5` | `claude-haiku-5-5` answers faster and costs much less, for simpler requests |
+| `JARVIS_EFFORT` | `low` | How hard Claude thinks; higher is slower, and Alexa only waits 8 seconds |
+| `JARVIS_VOICE` | `Brian` | Amazon Polly voice for skill replies; set it blank for Alexa's own voice |
+
 ## Local development
 
 ```bash
