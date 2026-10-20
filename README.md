@@ -156,8 +156,11 @@ curl -X PUT http://192.168.10.6/api/settings \
 | `background_mode` | `sky` | `sky`, `photo` or `slideshow` (set from `/photos`) |
 | `background_photo` / `background_mins` | — / 15 | Chosen photo; slideshow interval |
 
-There is no parent PIN: claiming a reward and awarding bonus stars are open to
-anyone at the screen. (A `PARENT_PIN` line left in an old `.env` is ignored.)
+**Claiming a prize needs the parent PIN**, set as `PARENT_PIN` in `.env` on the Mini (it is
+never in the repo, which is public). With no PIN set, claiming is locked; five wrong
+tries lock it for a minute. **↩ Claims** on the *Saving up for* card lists recent claims
+with a **Refund** button (also PIN-protected) that gives the stars back. Awarding bonus
+stars stays open to anyone at the screen.
 
 ### Morning and evening jobs
 

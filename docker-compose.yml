@@ -46,6 +46,8 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       INVITE_FROM: ${INVITE_FROM:-}
+      # Parent PIN for claiming prizes. Unset = claiming is locked.
+      PARENT_PIN: ${PARENT_PIN:-}
       # J.A.R.V.I.S. ("Alexa, ask Jarvis ..."). Blank key disables him.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ALEXA_SKILL_ID: ${ALEXA_SKILL_ID:-}

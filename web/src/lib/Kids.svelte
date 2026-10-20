@@ -61,6 +61,12 @@
   let claiming = $state(null); // reward being claimed
   let claimKid = $state('');
   let claimError = $state('');
+  let claimPin = $state(''); // parent PIN, needed to claim or refund
+
+  // Recent claims, for refunding a mistake
+  let showClaims = $state(false);
+  let claimList = $state([]);
+  let refundError = $state('');
 
   // Bonus stars from a parent, with a note saying what for and who gave them
   const AWARD_POINTS = [1, 2, 3, 5, 10];
@@ -246,19 +252,47 @@
     const first = kids.find((k) => !claimBlock(k, reward));
     claimKid = first ? first.slug : '';
     claimError = '';
+    claimPin = '';
   }
 
   async function confirmClaim() {
     if (!claimKid) return (claimError = 'Nobody can claim this one right now');
+    if (!claimPin.trim()) return (claimError = 'A grown-up needs to enter the PIN');
     try {
       await api.post('/rewards/' + claiming.id + '/claim', {
-        kid_slug: claimKid
+        kid_slug: claimKid,
+        pin: claimPin.trim()
       });
+      claimPin = '';
       claiming = null;
       bigConfetti();
       await load();
     } catch (e) {
       claimError = e.message;
+    }
+  }
+
+  async function openClaims() {
+    showClaims = true;
+    refundError = '';
+    claimPin = '';
+    try {
+      claimList = await api.get('/reward-claims?limit=15');
+    } catch (e) {
+      refundError = e.message;
+    }
+  }
+
+  async function refund(c) {
+    refundError = '';
+    if (!claimPin.trim()) return (refundError = 'Enter the PIN first');
+    if (!confirm('Refund ' + c.cost + ' ⭐ to ' + c.kid_name + ' for "' + c.label + '"?')) return;
+    try {
+      await api.post('/reward-claims/' + c.id + '/refund', { pin: claimPin.trim() });
+      claimList = claimList.filter((x) => x.id !== c.id);
+      await load();
+    } catch (e) {
+      refundError = e.message;
     }
   }
 
@@ -449,7 +483,10 @@
 
 {#if rewards.length}
   <div class="card rewards">
-    <div class="rewards-title">🎁 Saving up for <span class="rewards-hint">tap to claim · resets every day</span></div>
+    <div class="rewards-title">
+      🎁 Saving up for <span class="rewards-hint">tap to claim · resets every day</span>
+      <button class="claims-btn" onclick={openClaims}>↩ Claims</button>
+    </div>
     <div class="rewards-grid">
       {#each rewards as r (r.id)}
         <button class="reward" onclick={() => openClaim(r)}>
@@ -501,10 +538,69 @@
         {/each}
       </div>
 
+      {#if claimKid}
+        <input
+          class="claim-pin"
+          type="password"
+          inputmode="numeric"
+          autocomplete="off"
+          maxlength="12"
+          placeholder="Grown-up PIN"
+          bind:value={claimPin}
+          onkeydown={(e) => e.key === 'Enter' && confirmClaim()}
+        />
+      {/if}
       {#if claimError}<div class="claim-err">{claimError}</div>{/if}
       <button class="claim-go" disabled={!claimKid} onclick={confirmClaim}>
         {claimKid ? 'Claim it! 🎉' : 'Nobody can claim this one yet'}
       </button>
+    </div>
+  </div>
+{/if}
+
+{#if showClaims}
+  <div
+    class="overlay"
+    onclick={() => (showClaims = false)}
+    onkeydown={(e) => e.key === 'Escape' && (showClaims = false)}
+    role="presentation"
+  >
+    <div
+      class="modal card award"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+      role="dialog"
+      tabindex="-1"
+    >
+      <div class="claim-head">↩ Recent claims</div>
+      <div class="claim-cost">Refunding gives the stars back (and the prize again, if it was today)</div>
+      <input
+        class="claim-pin"
+        type="password"
+        inputmode="numeric"
+        autocomplete="off"
+        maxlength="12"
+        placeholder="Grown-up PIN"
+        bind:value={claimPin}
+      />
+      {#if refundError}<div class="claim-err">{refundError}</div>{/if}
+      {#if claimList.length}
+        <div class="aw-hist">
+          {#each claimList as c (c.id)}
+            <div class="aw-row">
+              <span class="aw-row-pts">{c.emoji} −{c.cost} ⭐</span>
+              <span class="aw-row-body">
+                <span class="aw-row-note">{c.kid_emoji} {c.kid_name}: {c.label}</span>
+                <span class="aw-row-meta">{whenStr(c.claimed_at)}</span>
+              </span>
+              <button class="refund-btn" onclick={() => refund(c)}>Refund</button>
+            </div>
+          {/each}
+        </div>
+      {:else if !refundError}
+        <div class="claim-cost">No claims yet</div>
+      {/if}
+      <button class="claim-go" onclick={() => (showClaims = false)}>Close</button>
     </div>
   </div>
 {/if}
@@ -1046,6 +1142,37 @@
     font-size: 13px;
     color: var(--text-muted);
     margin-top: 2px;
+  }
+  .claim-pin {
+    display: block;
+    width: 100%;
+    margin: 10px 0 4px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 20px;
+    letter-spacing: 4px;
+    text-align: center;
+    background: #fff;
+    -webkit-appearance: none;
+  }
+  .claims-btn {
+    float: right;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--bg);
+    border-radius: 999px;
+    padding: 3px 10px;
+  }
+  .refund-btn {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: #fee2e2;
+    color: #b91c1c;
   }
   .claim-err {
     color: #b91c1c;
