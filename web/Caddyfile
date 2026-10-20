@@ -8,32 +8,33 @@
 	skip_install_trust
 	# Chrome sends no SNI when you browse to a bare IP, so tell Caddy which
 	# certificate to present.
-	default_sni 192.168.10.6
+	default_sni {$DASHBOARD_HOST:192.168.10.6}
 }
-# Published on the Mini as https://192.168.10.6:8443 (compose maps 8443->443).
-# The host matcher ignores the port, so the site address stays as below.
+# The Mini's address comes from DASHBOARD_HOST in .env (compose passes it
+# in; 192.168.10.6 if unset). Published as https://<host>:8443 (compose maps
+# 8443->443); the host matcher ignores the port.
 
 (site) {
 	# API and calendar feed proxy to the api container.
 	#
 	# Exception: Alexa's emulated Hue bridge ("Alexa, bedtime"). It runs in
-	# Home Assistant on 192.168.10.6:8300, but Echos only discover a Hue bridge
+	# Home Assistant on <host>:8300, but Echos only discover a Hue bridge
 	# on port 80 — so HA advertises port 80 and these paths are forwarded to
 	# it. HA's bridge always hands out the username "nouser" (hue_api.py), so
 	# /api/nouser* can never collide with the dashboard's own /api routes.
 	# `route` keeps the order literal: Hue first, everything else to the API.
 	handle /api/* {
 		route {
-			reverse_proxy /api/nouser* 192.168.10.6:8300
+			reverse_proxy /api/nouser* {$DASHBOARD_HOST:192.168.10.6}:8300
 			reverse_proxy api:3000
 		}
 	}
 	# Hue pairing (POST /api) and discovery document.
 	handle /api {
-		reverse_proxy 192.168.10.6:8300
+		reverse_proxy {$DASHBOARD_HOST:192.168.10.6}:8300
 	}
 	handle /description.xml {
-		reverse_proxy 192.168.10.6:8300
+		reverse_proxy {$DASHBOARD_HOST:192.168.10.6}:8300
 	}
 
 	# Hashed build assets: filename changes whenever content changes,
@@ -73,7 +74,7 @@
 	import site
 }
 
-https://192.168.10.6 {
+https://{$DASHBOARD_HOST:192.168.10.6} {
 	tls internal
 	import site
 }

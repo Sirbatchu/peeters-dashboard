@@ -44,6 +44,28 @@ const TABLES_PER_STAR = 5;
 const TABLES_DAILY_CAP = 5;
 const TABLES_BY = 'Times tables';
 
+// Parent PIN for claiming prizes and refunding claims. It lives only in
+// .env (PARENT_PIN) because the repo is public. With no PIN set, claiming is
+// locked rather than open. Five wrong tries lock it for a minute.
+let wrongPins = 0;
+let pinLockedUntil = 0;
+
+/** null when the PIN is right, else [status, message]. */
+function pinProblem(pin) {
+  const want = String(process.env.PARENT_PIN || '').trim();
+  if (!want) return [503, 'No parent PIN is set — add PARENT_PIN to .env on the Mini'];
+  if (Date.now() < pinLockedUntil) return [429, 'Too many wrong PINs — try again in a minute'];
+  if (String(pin || '').trim() !== want) {
+    if (++wrongPins >= 5) {
+      wrongPins = 0;
+      pinLockedUntil = Date.now() + 60_000;
+    }
+    return [403, 'Wrong PIN'];
+  }
+  wrongPins = 0;
+  return null;
+}
+
 /** Run a one-off data change once, remembered by a settings key. */
 async function once(key, fn) {
   const { rowCount } = await q('SELECT 1 FROM settings WHERE key = $1', [key]);
@@ -329,11 +351,13 @@ export default async function routes(app) {
     return rows;
   });
 
-  // Claiming spends the kid's star balance. Each prize can be claimed once
-  // per kid per day. No PIN: the family asked for claims and awards to be open.
+  // Claiming spends the kid's star balance and needs the parent PIN. Each
+  // prize can be claimed once per kid per day.
   app.post('/rewards/:id/claim', async (req, reply) => {
-    const { kid_slug } = req.body || {};
+    const { kid_slug, pin } = req.body || {};
     if (!kid_slug) return reply.status(400).send({ error: 'kid_slug required' });
+    const bad = pinProblem(pin);
+    if (bad) return reply.status(bad[0]).send({ error: bad[1] });
     if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) {
       return reply.status(404).send({ error: 'reward not available' });
     }
@@ -372,6 +396,33 @@ export default async function routes(app) {
       return reply.status(409).send({ error: 'already claimed today — try again tomorrow' });
     }
     return rows[0];
+  });
+
+  // Recent claims, newest first, so a mistaken one can be refunded.
+  app.get('/reward-claims', async (req) => {
+    const limit = Math.min(Number(req.query.limit) || 15, 50);
+    const { rows } = await q(
+      `SELECT c.id, c.kid_slug, c.cost, c.day, c.claimed_at,
+              r.label, r.emoji, k.name AS kid_name, k.emoji AS kid_emoji
+         FROM reward_claims c
+         JOIN rewards r ON r.id = c.reward_id
+         JOIN kids k ON k.slug = c.kid_slug
+        ORDER BY c.claimed_at DESC LIMIT $1`,
+      [limit]
+    );
+    return rows;
+  });
+
+  // Refund = forget the claim: its stars come back and, if it was today,
+  // the prize can be claimed again. Needs the parent PIN.
+  app.post('/reward-claims/:id/refund', async (req, reply) => {
+    const bad = pinProblem((req.body || {}).pin);
+    if (bad) return reply.status(bad[0]).send({ error: bad[1] });
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return reply.status(404).send({ error: 'no such claim' });
+    const { rows } = await q('DELETE FROM reward_claims WHERE id = $1 RETURNING kid_slug, cost', [req.params.id]);
+    if (!rows.length) return reply.status(404).send({ error: 'already refunded' });
+    const { rows: bal } = await q(BALANCE_SQL, [rows[0].kid_slug]);
+    return { refunded: rows[0].cost, kid_slug: rows[0].kid_slug, stars: bal[0].total };
   });
 
   // ── Times-tables game ──
